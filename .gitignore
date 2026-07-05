@@ -1,0 +1,43 @@
+## .NET / Blazor
+bin/
+obj/
+*.user
+*.suo
+.vs/
+*.userprefs
+
+## EF Core migrations output (keep migrations, ignore snapshots if needed)
+# Uncomment if desired:
+# **/Migrations/
+
+## SQLite databases (runtime data, not source)
+*.db
+*.db-shm
+*.db-wal
+
+## Published output
+publish/
+out/
+dist/
+
+## Rider / JetBrains
+.idea/
+*.sln.iml
+
+## VS Code
+.vscode/
+
+## OS
+.DS_Store
+Thumbs.db
+
+## NuGet
+*.nupkg
+*.snupkg
+project.lock.json
+packages/
+
+.superpowers/
+.claude
+
+docs/
