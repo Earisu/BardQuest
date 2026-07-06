@@ -1,16 +1,36 @@
+using Avalonia;
+
 namespace BardQuest.Updater;
 
 internal static class Program
 {
-    // Usage:
+    // Headless CLI (used by deploy-sandbox.sh / CI):
     //   BardQuest.Updater install <managedDir> <dllSourceDir>
     //   BardQuest.Updater patch   <managedDir>
     //   BardQuest.Updater restore <managedDir>
-    private static int Main(string[] args)
+    // Any other invocation launches the Avalonia GUI.
+    [STAThread]
+    public static int Main(string[] args)
+    {
+        if (args.Length >= 1 && args[0] is "install" or "patch" or "restore")
+        {
+            return RunCli(args);
+        }
+
+        _ = BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
+        return 0;
+    }
+
+    public static AppBuilder BuildAvaloniaApp() =>
+        AppBuilder.Configure<App>()
+            .UsePlatformDetect()
+            .LogToTrace();
+
+    private static int RunCli(string[] args)
     {
         try
         {
-            switch (args.Length >= 1 ? args[0] : "")
+            switch (args[0])
             {
                 case "install":
                     ModDeployer.Copy(args[2], args[1]);
