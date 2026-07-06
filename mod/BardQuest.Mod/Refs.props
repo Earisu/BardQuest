@@ -1,6 +1,7 @@
 <Project>
   <ItemGroup>
     <Reference Include="Assembly-CSharp" HintPath="$(YargManaged)/Assembly-CSharp.dll" Private="false" />
+    <Reference Include="Assembly-CSharp-firstpass" HintPath="$(YargManaged)/Assembly-CSharp-firstpass.dll" Private="false" />
     <Reference Include="UnityEngine" HintPath="$(YargManaged)/UnityEngine.dll" Private="false" />
     <Reference Include="UnityEngine.CoreModule" HintPath="$(YargManaged)/UnityEngine.CoreModule.dll" Private="false" />
     <Reference Include="UnityEngine.UIElementsModule" HintPath="$(YargManaged)/UnityEngine.UIElementsModule.dll" Private="false" />
