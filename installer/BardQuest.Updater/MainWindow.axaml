@@ -1,0 +1,62 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:BardQuest.Updater"
+        x:Class="BardQuest.Updater.MainWindow"
+        x:DataType="vm:MainViewModel"
+        Width="560" Height="520"
+        Title="BardQuest Updater"
+        CanResize="False"
+        WindowStartupLocation="CenterScreen">
+  <StackPanel Margin="24" Spacing="14">
+    <TextBlock Text="BardQuest" FontSize="28" FontWeight="Bold" />
+
+    <TextBlock Text="YARG installation" FontWeight="SemiBold" />
+    <ComboBox ItemsSource="{Binding Installs}"
+              SelectedItem="{Binding SelectedInstall, Mode=TwoWay}"
+              HorizontalAlignment="Stretch"
+              PlaceholderText="Select a YARG install">
+      <ComboBox.ItemTemplate>
+        <DataTemplate x:DataType="vm:YargInstall">
+          <TextBlock Text="{Binding Label}" />
+        </DataTemplate>
+      </ComboBox.ItemTemplate>
+    </ComboBox>
+
+    <StackPanel Orientation="Horizontal" Spacing="8">
+      <Button Content="Rescan" Click="OnRescan" />
+      <Button Content="Choose folder…" Click="OnChooseFolder" />
+    </StackPanel>
+
+    <Border Background="#20FFFFFF" CornerRadius="4" Padding="10">
+      <StackPanel Spacing="4">
+        <TextBlock Text="Selected Managed folder:" Opacity="0.7" FontSize="12" />
+        <TextBlock Text="{Binding ManagedDir}" TextWrapping="Wrap" FontFamily="monospace" />
+      </StackPanel>
+    </Border>
+
+    <TextBlock Text="{Binding Status}" TextWrapping="Wrap" Opacity="0.8" />
+
+    <Border Height="1" Background="#30FFFFFF" Margin="0,4" />
+
+    <StackPanel Orientation="Horizontal" Spacing="8">
+      <Button Content="Install" Click="OnInstall" IsEnabled="{Binding CanInstall}" />
+      <Button Content="Update" Click="OnUpdate" IsEnabled="{Binding CanInstall}" />
+      <Button Content="Check for updates" Click="OnCheck" IsEnabled="{Binding CanAct}" />
+      <Button Content="Remove" Click="OnRemove" IsEnabled="{Binding CanAct}" />
+    </StackPanel>
+
+    <TextBlock Text="{Binding CompatMessage}" Foreground="#F0B429" TextWrapping="Wrap"
+               IsVisible="{Binding HasCompatWarning}" />
+
+    <StackPanel Spacing="2">
+      <StackPanel Orientation="Horizontal" Spacing="4">
+        <TextBlock Text="Installed:" Opacity="0.7" FontSize="12" />
+        <TextBlock Text="{Binding InstalledDisplay}" Opacity="0.7" FontSize="12" />
+      </StackPanel>
+      <StackPanel Orientation="Horizontal" Spacing="4">
+        <TextBlock Text="This build:" Opacity="0.7" FontSize="12" />
+        <TextBlock Text="{Binding CandidateDisplay}" Opacity="0.7" FontSize="12" />
+      </StackPanel>
+    </StackPanel>
+  </StackPanel>
+</Window>

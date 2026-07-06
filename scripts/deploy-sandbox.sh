@@ -10,13 +10,13 @@ if [[ ! -f "$YARG_MANAGED/Assembly-CSharp.dll" ]]; then
 fi
 
 echo "Building mod against sandbox Managed..."
-dotnet build "$ROOT/mod/BardQuest.Mod/BardQuest.Mod.csproj" -c Debug -p:YargManaged="$YARG_MANAGED"
+dotnet build "$ROOT/mod/BardQuest.Mod/BardQuest.Mod.csproj" -c Debug -p:YargManaged="$YARG_MANAGED" -p:ModVersion=0.0.0-dev
 
-echo "Building installer..."
-dotnet build "$ROOT/installer/BardQuest.Installer/BardQuest.Installer.csproj" -c Release
+echo "Building updater..."
+dotnet build "$ROOT/installer/BardQuest.Updater/BardQuest.Updater.csproj" -c Release
 
 echo "Installing (copy DLLs + patch seam) into sandbox..."
-dotnet "$ROOT/installer/BardQuest.Installer/bin/Release/net10.0/BardQuest.Installer.dll" \
+dotnet "$ROOT/installer/BardQuest.Updater/bin/Release/net10.0/BardQuest.Updater.dll" \
   install "$YARG_MANAGED" "$ROOT/mod/BardQuest.Mod/bin/Debug"
 
 echo "BardQuest installed."

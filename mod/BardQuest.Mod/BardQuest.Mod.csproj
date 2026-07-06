@@ -9,4 +9,8 @@
   <ItemGroup>
     <ProjectReference Include="../../src/BardQuest.Domain/BardQuest.Domain.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <AssemblyMetadata Condition="'$(ModVersion)' != ''" Include="BardQuestModVersion" Value="$(ModVersion)" />
+    <AssemblyMetadata Condition="'$(YargTarget)' != ''" Include="BardQuestYargTarget" Value="$(YargTarget)" />
+  </ItemGroup>
 </Project>

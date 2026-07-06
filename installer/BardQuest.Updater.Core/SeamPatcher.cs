@@ -1,7 +1,7 @@
 using Mono.Cecil;
 using Mono.Cecil.Cil;
 
-namespace BardQuest.Installer;
+namespace BardQuest.Updater;
 
 public static class SeamPatcher
 {
@@ -31,15 +31,15 @@ public static class SeamPatcher
         // Always read the pristine backup so re-running patches clean.
         using var module = ModuleDefinition.ReadModule(backup, readerParams);
 
-        var target = module.GetType(TargetType)
+        TypeDefinition target = module.GetType(TargetType)
             ?? throw new InvalidOperationException($"Type not found: {TargetType}");
-        var onEnable = target.Methods.SingleOrDefault(m => m.Name == TargetMethod && m.Parameters.Count == 0)
+        MethodDefinition onEnable = target.Methods.SingleOrDefault(m => m.Name == TargetMethod && m.Parameters.Count == 0)
             ?? throw new InvalidOperationException($"Method not found: {TargetType}::{TargetMethod}()");
 
-        var bootstrapRef = ResolveBootstrapMethod(module, resolver, managedDir, target);
+        MethodReference bootstrapRef = ResolveBootstrapMethod(module, resolver, managedDir, target);
 
-        var il = onEnable.Body.GetILProcessor();
-        var first = onEnable.Body.Instructions[0];
+        ILProcessor il = onEnable.Body.GetILProcessor();
+        Instruction first = onEnable.Body.Instructions[0];
         il.InsertBefore(first, il.Create(OpCodes.Ldarg_0));
         il.InsertBefore(first, il.Create(OpCodes.Call, bootstrapRef));
 
@@ -59,13 +59,13 @@ public static class SeamPatcher
         if (File.Exists(modPath))
         {
             var mod = ModuleDefinition.ReadModule(modPath, new ReaderParameters { AssemblyResolver = resolver });
-            var bootstrap = mod.GetType(BootstrapType)
+            TypeDefinition bootstrap = mod.GetType(BootstrapType)
                 ?? throw new InvalidOperationException($"Type not found in BardQuest.Mod: {BootstrapType}");
-            var method = bootstrap.Methods.Single(m => m.Name == BootstrapMethod && m.Parameters.Count == 1);
+            MethodDefinition method = bootstrap.Methods.Single(m => m.Name == BootstrapMethod && m.Parameters.Count == 1);
             return module.ImportReference(method);
         }
 
-        var inModule = module.GetType(BootstrapType);
+        TypeDefinition inModule = module.GetType(BootstrapType);
         return inModule != null
             ? module.ImportReference(inModule.Methods.Single(m => m.Name == BootstrapMethod))
             : throw new InvalidOperationException("BardQuest.Mod.dll not found and no in-module Bootstrap.");
@@ -79,5 +79,38 @@ public static class SeamPatcher
             File.Copy(backup, live, overwrite: true);
             File.Delete(backup);
         }
+    }
+
+    // True if the live Assembly-CSharp.dll in managedDir carries the seam marker.
+    public static bool IsManagedDirPatched(string managedDir)
+    {
+        string live = Path.Combine(managedDir, "Assembly-CSharp.dll");
+        if (!File.Exists(live))
+        {
+            return false;
+        }
+
+        using var module = ModuleDefinition.ReadModule(live);
+        return IsPatched(module);
+    }
+
+    // Launcher-clobber-safe patch entry point. If the live DLL is already patched, does nothing.
+    // Otherwise discards any stale backup (the YARC launcher may have replaced Assembly-CSharp.dll
+    // with a newer pristine one, leaving our old .bardquest-bak — patching from that would revert
+    // YARG), so the current live DLL becomes the fresh baseline, then patches.
+    public static void EnsurePatched(string managedDir)
+    {
+        if (IsManagedDirPatched(managedDir))
+        {
+            return;
+        }
+
+        string backup = Path.Combine(managedDir, "Assembly-CSharp.dll.bardquest-bak");
+        if (File.Exists(backup))
+        {
+            File.Delete(backup);
+        }
+
+        Patch(managedDir);
     }
 }

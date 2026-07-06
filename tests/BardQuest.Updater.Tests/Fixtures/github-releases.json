@@ -1,0 +1,19 @@
+[
+  {
+    "tag_name": "v1.1.0",
+    "draft": false,
+    "prerelease": true,
+    "assets": [
+      { "name": "BardQuest-v1.1.0.zip", "browser_download_url": "https://example.test/pre.zip" }
+    ]
+  },
+  {
+    "tag_name": "v1.0.0",
+    "draft": false,
+    "prerelease": false,
+    "assets": [
+      { "name": "notes.txt", "browser_download_url": "https://example.test/notes.txt" },
+      { "name": "BardQuest-v1.0.0.zip", "browser_download_url": "https://example.test/BardQuest-v1.0.0.zip" }
+    ]
+  }
+]

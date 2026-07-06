@@ -6,14 +6,15 @@ An in-YARG Unity mod delivering RPG-style quest progression against your real YA
 
 - `src/BardQuest.Domain` — pure logic (net10.0;netstandard2.1). No Unity, no I/O.
 - `mod/BardQuest.Mod` — the in-game mod (netstandard2.1). Builds only with `-p:YargManaged=<sandbox Managed>`.
-- `installer/BardQuest.Installer` — standalone Cecil patcher (net10.0). Single seam: one call injected at `MainMenu.OnEnable`.
+- `installer/BardQuest.Updater` — Avalonia GUI app (net10.0) to install/update/remove the mod, over a `BardQuest.Updater.Core` library (Cecil patcher, YARG-install discovery, GitHub release check, YARG-version compatibility gate). The mod bakes `BardQuestModVersion`/`BardQuestYargTarget` markers (via `-p:ModVersion`/`-p:YargTarget`); the updater reads them to show versions and block installing a build into a mismatched YARG. Also keeps a headless `install | patch | restore` CLI for `deploy-sandbox.sh`/CI.
 - `lib/YARG.Core` — vendored source submodule (enums shared with the game).
 
 ## Build & run (sandbox)
 
 - `dotnet build BardQuest.slnx` — builds everything (domain, mod, installer, tests). The mod compiles against the sandbox YARG assemblies by default (`yarg-sandbox/`); override with `-p:YargManaged=<path-to-a-YARG-Managed-folder>`.
-- Tests without YARG (e.g. CI): `dotnet test tests/BardQuest.Installer.Tests` — targets the test project only, so it needs no game assemblies. Only the mod build (and a full-solution build) require YARG.
+- Tests without YARG (e.g. CI): `dotnet test tests/BardQuest.Updater.Tests` — targets the test project only, so it needs no game assemblies. Only the mod build (and a full-solution build) require YARG.
 - `bash scripts/deploy-sandbox.sh` — builds the mod + installer and installs into `yarg-sandbox/`.
+- `dotnet run --project installer/BardQuest.Updater` — launches the GUI installer/updater. It discovers YARG installs from the YARC launcher (`<LocalAppData>/YARC/YARG Installs`), or takes a manually chosen Managed folder.
 - Verification is user-driven, in-game, against the sandbox copy only.
 
 ## Conventions
@@ -24,5 +25,5 @@ An in-YARG Unity mod delivering RPG-style quest progression against your real YA
 ## Style
 
 - Code style enforced via root `.editorconfig` (Microsoft's documented .NET conventions, severities raised to `warning` so `dotnet format` actually applies them).
-- Before committing, run `dotnet format style`, `dotnet format analyzers`, and `dotnet format whitespace` against each project individually (`src/BardQuest.Domain`, `mod/BardQuest.Mod`, `installer/BardQuest.Installer`, `tests/BardQuest.Installer.Tests`) — never against `BardQuest.slnx` or `lib/YARG.Core`, since solution-wide formatting would also rewrite the vendored submodule.
+- Before committing, run `dotnet format style`, `dotnet format analyzers`, and `dotnet format whitespace` against each project individually (`src/BardQuest.Domain`, `mod/BardQuest.Mod`, `installer/BardQuest.Updater`, `tests/BardQuest.Updater.Tests`) — never against `BardQuest.slnx` or `lib/YARG.Core`, since solution-wide formatting would also rewrite the vendored submodule.
 - Rider users: `BardQuest.sln.DotSettings` (committed) mirrors this in ReSharper/Rider's own settings layer.

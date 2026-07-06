@@ -1,4 +1,5 @@
 extern alias yargpkg;
+
 using UnityEngine;
 using UnityEngine.UIElements;
 
@@ -35,7 +36,9 @@ public sealed class BardQuestCanvas
                    ?? Resources.GetBuiltinResource<Font>("Arial.ttf");
         root.style.unityFont = font;
 
-        var title = new Label("BARDQUEST") { style =
+        var title = new Label("BARDQUEST")
+        {
+            style =
             {
                 color = (Color)Fg, fontSize = 48, unityFontStyleAndWeight = FontStyle.Bold, marginTop = 60,
                 marginLeft = 60
@@ -43,7 +46,9 @@ public sealed class BardQuestCanvas
         };
         root.Add(title);
 
-        var hint = new Label("Empty canvas — Phase 0. Press Back to return.") { style =
+        var hint = new Label("Empty canvas — Phase 0. Press Back to return.")
+        {
+            style =
             {
                 color = (Color)Fg, fontSize = 22, marginLeft = 60
             }
