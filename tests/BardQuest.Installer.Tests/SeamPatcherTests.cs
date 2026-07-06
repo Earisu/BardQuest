@@ -1,9 +1,9 @@
 using System.IO;
 using System.Linq;
+using BardQuest.Installer;
 using Mono.Cecil;
 using Mono.Cecil.Cil;
 using Xunit;
-using BardQuest.Installer;
 
 public class SeamPatcherTests
 {
