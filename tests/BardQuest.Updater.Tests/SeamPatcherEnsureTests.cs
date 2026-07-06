@@ -71,6 +71,30 @@ public class SeamPatcherEnsureTests
     }
 
     [Fact]
+    public void Restore_AfterPatch_RevertsLiveDllAndDeletesBackup()
+    {
+        string managed = Path.Combine(Path.GetTempPath(), "bq-restore-" + Guid.NewGuid());
+        try
+        {
+            WriteAssembly(managed, "Pristine");
+            string live = Path.Combine(managed, "Assembly-CSharp.dll");
+            string backup = live + ".bardquest-bak";
+
+            Assert.False(SeamPatcher.IsManagedDirPatched(managed));
+
+            SeamPatcher.Patch(managed);
+            Assert.True(SeamPatcher.IsManagedDirPatched(managed));
+            Assert.True(File.Exists(backup));
+
+            SeamPatcher.Restore(managed);
+            Assert.False(SeamPatcher.IsManagedDirPatched(managed));
+            Assert.True(HasType(live, "BuildTag", "Pristine")); // live restored to the pre-patch build
+            Assert.False(File.Exists(backup));                  // backup consumed by Restore
+        }
+        finally { Directory.Delete(managed, recursive: true); }
+    }
+
+    [Fact]
     public void EnsurePatched_WhenAlreadyPatched_IsNoOp()
     {
         string managed = Path.Combine(Path.GetTempPath(), "bq-ensure2-" + Guid.NewGuid());

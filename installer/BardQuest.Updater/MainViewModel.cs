@@ -141,6 +141,10 @@ public sealed class MainViewModel : INotifyPropertyChanged
     private static ModAssemblyInfo CandidateInfo() =>
         ModAssemblyReader.Read(Path.Combine(ModDllSourceDir(), "BardQuest.Mod.dll"));
 
+    private string? CurrentInstallTag() =>
+        SelectedInstall?.Label
+        ?? (HasManagedDir ? YargLocator.TagFromManagedDir(_config.ManagedDir!) : null);
+
     // Recomputes the installed/candidate version display and the compatibility gate.
     // Call whenever the selected Managed dir/install changes, or after an action.
     public void RefreshCompat()
@@ -157,8 +161,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
             ? cv + (candidate.YargTarget is { } ct ? $" for YARG {ct}" : "")
             : "";
 
-        string? installTag = SelectedInstall?.Label
-            ?? (HasManagedDir ? YargLocator.TagFromManagedDir(_config.ManagedDir!) : null);
+        string? installTag = CurrentInstallTag();
         _compat = YargCompat.Evaluate(candidate.YargTarget, installTag);
         CompatMessage = _compat == Compatibility.Incompatible
             ? $"⚠ This build targets YARG {candidate.YargTarget}; selected install is {installTag}."
@@ -301,8 +304,19 @@ public sealed class MainViewModel : INotifyPropertyChanged
                 return;
             }
 
-            ApplyModDlls(extracted, latest.Value.Tag, managed);
-            Status = $"Updated to {latest.Value.Tag}.";
+            // Gate the DOWNLOADED build (not just the bundled candidate): a newer release may
+            // have been re-cut against a different YARG version than the current install targets.
+            ModAssemblyInfo downloaded = ModAssemblyReader.Read(Path.Combine(extracted, "BardQuest.Mod.dll"));
+            string? installTag = CurrentInstallTag();
+            if (YargCompat.Evaluate(downloaded.YargTarget, installTag) == Compatibility.Incompatible)
+            {
+                Status = $"⚠ Downloaded build targets YARG {downloaded.YargTarget}; selected install is {installTag}. Update aborted.";
+                return;
+            }
+
+            string version = downloaded.ModVersion ?? latest.Value.Tag;
+            ApplyModDlls(extracted, version, managed);
+            Status = $"Updated to {version}.";
         }
         catch (Exception ex)
         {
