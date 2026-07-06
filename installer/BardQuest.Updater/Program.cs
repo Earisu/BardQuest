@@ -1,11 +1,11 @@
-namespace BardQuest.Installer;
+namespace BardQuest.Updater;
 
 internal static class Program
 {
     // Usage:
-    //   BardQuest.Installer install <managedDir> <dllSourceDir>
-    //   BardQuest.Installer patch   <managedDir>
-    //   BardQuest.Installer restore <managedDir>
+    //   BardQuest.Updater install <managedDir> <dllSourceDir>
+    //   BardQuest.Updater patch   <managedDir>
+    //   BardQuest.Updater restore <managedDir>
     private static int Main(string[] args)
     {
         try

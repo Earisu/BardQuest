@@ -3,7 +3,7 @@ using Mono.Cecil.Cil;
 
 using Xunit;
 
-namespace BardQuest.Installer.Tests;
+namespace BardQuest.Updater.Tests;
 
 public class SeamPatcherTests
 {
@@ -43,7 +43,7 @@ public class SeamPatcherTests
     [Fact]
     public void Patch_InjectsCallAndMarker_AndIsIdempotent()
     {
-        var dir = BuildSyntheticManagedDir(Path.Combine(Path.GetTempPath(), "bq-seam-" + Guid.NewGuid()));
+        string dir = BuildSyntheticManagedDir(Path.Combine(Path.GetTempPath(), "bq-seam-" + Guid.NewGuid()));
         try
         {
             SeamPatcher.Patch(dir);

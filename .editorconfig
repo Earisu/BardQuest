@@ -143,7 +143,7 @@ csharp_prefer_simple_using_statement = true:warning
 csharp_style_namespace_declarations = file_scoped:warning
 csharp_style_prefer_method_group_conversion = true:warning
 csharp_style_prefer_primary_constructors = true:warning
-# Deliberately off: installer/BardQuest.Installer/Program.cs uses a classic
+# Deliberately off: installer/BardQuest.Updater/Program.cs uses a classic
 # Main(string[] args) for clear multi-command CLI dispatch (install/patch/restore).
 csharp_style_prefer_top_level_statements = false:none
 
