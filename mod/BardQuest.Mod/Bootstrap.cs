@@ -1,6 +1,9 @@
 using YARG.Menu.Main;
 
-namespace BardQuest.Mod;
+// Deliberately in the top-level BardQuest namespace: the installer injects an IL call to
+// BardQuest.Bootstrap.OnMainMenuEnabled (see SeamPatcher.BootstrapType), so this type name is a
+// contract with the patcher. Do not fold it into BardQuest.Mod to "match the folder".
+namespace BardQuest;
 
 // The single static entry point the installer injects a call to, at the start of MainMenu.OnEnable().
 public static class Bootstrap
@@ -9,11 +12,11 @@ public static class Bootstrap
     {
         try
         {
-            BardQuestManager.EnsureCreated().OnMainMenuEnabled(mainMenu);
+            Mod.BardQuestManager.EnsureCreated().OnMainMenuEnabled(mainMenu);
         }
         catch (Exception ex)
         {
-            ModLog.Error("Bootstrap failed: " + ex);
+            Mod.ModLog.Error("Bootstrap failed: " + ex);
         }
     }
 }
