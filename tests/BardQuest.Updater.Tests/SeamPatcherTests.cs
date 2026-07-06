@@ -3,6 +3,8 @@ using Mono.Cecil.Cil;
 
 using Xunit;
 
+using BardQuest.Updater;
+
 namespace BardQuest.Updater.Tests;
 
 public class SeamPatcherTests
