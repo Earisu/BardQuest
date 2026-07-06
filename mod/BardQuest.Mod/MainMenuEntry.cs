@@ -1,5 +1,4 @@
 using System;
-using System.Linq;
 using System.Reflection;
 using TMPro;
 using UnityEngine;
@@ -87,7 +86,6 @@ namespace BardQuest.Mod
             // Overwrite the colorizer's captured defaults so the deselected color is BardQuest's.
             foreach (var colorizer in clone.GetComponentsInChildren<NavigationTextColorizer>(true))
             {
-                var texts = typeof(NavigationTextColorizer).GetField("_texts", Priv)?.GetValue(colorizer) as TMP_Text[];
                 var defaults = typeof(NavigationTextColorizer).GetField("_defaultColors", Priv)?.GetValue(colorizer) as Color[];
                 if (defaults != null)
                     for (int i = 0; i < defaults.Length; i++) defaults[i] = BardQuestColor;

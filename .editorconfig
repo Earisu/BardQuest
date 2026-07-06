@@ -164,16 +164,6 @@ dotnet_diagnostic.CA1848.severity = none
 dotnet_diagnostic.CA1873.severity = none
 
 #########################################################
-# Generated EF Core migrations — exclude from analysis
-#########################################################
-
-[**/Migrations/*.cs]
-generated_code = true
-# CA1861 ("prefer static readonly arrays") dominates the migration snapshots and is pure noise there.
-dotnet_diagnostic.CA1861.severity = none
-dotnet_analyzer_diagnostic.category-Performance.severity = none
-
-#########################################################
 # Test projects — relax conventions that are idiomatic in tests
 #########################################################
 
