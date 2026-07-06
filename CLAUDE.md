@@ -11,7 +11,7 @@ An in-YARG Unity mod delivering RPG-style quest progression against your real YA
 
 ## Build & run (sandbox)
 
-- `dotnet build BardQuest.slnx` — builds the domain, installer, and tests (not the mod, which needs YARG's assemblies).
+- `dotnet build BardQuest.slnx` — builds everything (domain, mod, installer, tests). The mod compiles against the sandbox YARG assemblies by default (`yarg-sandbox/`); override with `-p:YargManaged=<path-to-a-YARG-Managed-folder>`.
 - `bash scripts/deploy-sandbox.sh` — builds the mod + installer and installs into `yarg-sandbox/`.
 - Verification is user-driven, in-game, against the sandbox copy only.
 
