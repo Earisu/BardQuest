@@ -23,5 +23,10 @@ namespace BardQuest.Mod
         {
             MainMenuEntry.Ensure(this, mainMenu);
         }
+
+        public void OpenCanvas()
+        {
+            ModLog.Info("OpenCanvas invoked (canvas built in Task 5).");
+        }
     }
 }
