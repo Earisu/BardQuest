@@ -26,4 +26,10 @@ public partial class MainWindow : Window
             _ = _vm.SetManualManagedDir(path);
         }
     }
+
+    private void OnInstall(object? sender, RoutedEventArgs e) => _vm.Install();
+
+    private void OnRemove(object? sender, RoutedEventArgs e) => _vm.Remove();
+
+    private async void OnCheck(object? sender, RoutedEventArgs e) => await _vm.CheckForUpdatesAsync();
 }
