@@ -1,0 +1,12 @@
+<wpf:ResourceDictionary xml:space="preserve" xmlns:s="clr-namespace:System;assembly=mscorlib" xmlns:ss="urn:shemas-jetbrains-com:settings-storage-xaml" xmlns:wpf="http://schemas.microsoft.com/winfx/2006/xaml/presentation">
+	<s:String x:Key="/Default/CodeStyle/CodeCleanup/Profiles/=BardQuest/@EntryIndexedValue">&lt;?xml version="1.0" encoding="utf-16"?&gt;&#xD;
+&lt;Profile name="BardQuest"&gt;&#xD;
+  &lt;CSReformatCode&gt;True&lt;/CSReformatCode&gt;&#xD;
+  &lt;CSOptimizeUsings&gt;&#xD;
+    &lt;OptimizeUsings&gt;True&lt;/OptimizeUsings&gt;&#xD;
+  &lt;/CSOptimizeUsings&gt;&#xD;
+  &lt;CSShortenReferences&gt;True&lt;/CSShortenReferences&gt;&#xD;
+  &lt;CSUpdateFileHeader&gt;False&lt;/CSUpdateFileHeader&gt;&#xD;
+&lt;/Profile&gt;</s:String>
+	<s:String x:Key="/Default/CodeStyle/CodeCleanup/SilentCleanupProfile/@EntryValue">BardQuest</s:String>
+</wpf:ResourceDictionary>

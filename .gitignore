@@ -39,5 +39,6 @@ packages/
 
 .superpowers/
 .claude
+yarg-sandbox/
 
 docs/

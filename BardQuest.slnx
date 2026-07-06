@@ -1,0 +1,18 @@
+<Solution>
+  <Folder Name="/installer/">
+    <Project Path="installer/BardQuest.Installer/BardQuest.Installer.csproj" />
+  </Folder>
+  <Folder Name="/lib/" />
+  <Folder Name="/lib/YARG.Core/">
+    <Project Path="lib/YARG.Core/YARG.Core/YARG.Core.csproj" />
+  </Folder>
+  <Folder Name="/mod/">
+    <Project Path="mod/BardQuest.Mod/BardQuest.Mod.csproj" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/BardQuest.Domain/BardQuest.Domain.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/BardQuest.Installer.Tests/BardQuest.Installer.Tests.csproj" />
+  </Folder>
+</Solution>

@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <!-- Empty single TF so the Directory.Build.props default (fired via Sdk.props) doesn't win over TargetFrameworks. -->
+    <TargetFramework></TargetFramework>
+    <TargetFrameworks>net10.0;netstandard2.1</TargetFrameworks>
+  </PropertyGroup>
+  <ItemGroup Condition="'$(TargetFramework)'!='netstandard2.1'">
+    <Compile Remove="Compat/**/*.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../lib/YARG.Core/YARG.Core/YARG.Core.csproj" />
+  </ItemGroup>
+</Project>
