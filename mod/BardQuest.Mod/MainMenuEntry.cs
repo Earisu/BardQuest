@@ -40,7 +40,21 @@ namespace BardQuest.Mod
                 DisablePersistentClicks(button);
                 button.SetOnClickEvent(() => manager.OpenCanvas());
 
-                container.GetComponent<NavigationGroup>()?.AddNavigatable(button);
+                var navGroup = container.GetComponent<NavigationGroup>();
+                if (navGroup != null)
+                {
+                    navGroup.AddNavigatable(button);
+                    // AddNavigatable appends to NavigationGroup's ordered _navigatables list, so nav order
+                    // would not match visual order. Re-place our entry immediately after Quickplay.
+                    var navListField = typeof(NavigationGroup).GetField("_navigatables", Priv);
+                    if (navListField?.GetValue(navGroup) is List<NavigatableBehaviour> navList)
+                    {
+                        navList.Remove(button);
+                        int quickplayIndex = navList.IndexOf(template);
+                        if (quickplayIndex >= 0) navList.Insert(quickplayIndex + 1, button);
+                        else navList.Add(button);
+                    }
+                }
                 ModLog.Info("Menu entry added.");
             }
             catch (Exception ex) { ModLog.Error("Menu entry injection failed: " + ex); }
