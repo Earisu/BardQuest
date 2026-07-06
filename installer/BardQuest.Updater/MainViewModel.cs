@@ -258,6 +258,79 @@ public sealed class MainViewModel : INotifyPropertyChanged
         return await ReleaseClient.FetchLatestReleaseAsync(http, ReleaseClient.DefaultOwner, ReleaseClient.DefaultRepo);
     }
 
+    public async Task UpdateAsync()
+    {
+        if (!CanInstall)
+        {
+            return;
+        }
+
+        Busy = true;
+        Status = "Checking for updates…";
+        string? temp = null;
+        try
+        {
+            string managed = _config.ManagedDir!;
+            ReleaseInfo? latest = await FetchLatestAsync();
+
+            bool newer = latest is { } rel
+                && _config.InstalledVersion is { } installed
+                && SemVer.TryParse(rel.Tag, out _) && SemVer.TryParse(installed, out _)
+                && SemVer.IsNewer(rel.Tag, installed);
+
+            if (!newer)
+            {
+                Status = "BardQuest is up to date.";
+                return;
+            }
+
+            if (SeamPatcher.IsManagedDirPatched(managed) && IsYargRunning())
+            {
+                Status = "Close YARG before updating, then click Update again.";
+                return;
+            }
+
+            Status = $"Downloading {latest!.Value.Tag}…";
+            temp = Path.Combine(Path.GetTempPath(), "bq-update-" + Guid.NewGuid());
+            _ = await Download(latest.Value.AssetUrl, temp);
+
+            string? extracted = ReleaseDownloader.ValidateExtracted(temp);
+            if (extracted is null)
+            {
+                Status = "Downloaded release did not contain the expected mod files.";
+                return;
+            }
+
+            ApplyModDlls(extracted, latest.Value.Tag, managed);
+            Status = $"Updated to {latest.Value.Tag}.";
+        }
+        catch (Exception ex)
+        {
+            Status = "Update failed: " + ex.Message;
+        }
+        finally
+        {
+            if (temp is not null && Directory.Exists(temp))
+            {
+                try { Directory.Delete(temp, recursive: true); } catch (IOException) { /* best-effort cleanup */ }
+            }
+
+            Busy = false;
+            RefreshCompat();
+        }
+    }
+
+    private static async Task<string> Download(string assetUrl, string destDir)
+    {
+        using var http = new HttpClient();
+        http.DefaultRequestHeaders.UserAgent.ParseAdd("BardQuest-Updater");
+        return await ReleaseDownloader.DownloadAndExtractAsync(http, assetUrl, destDir);
+    }
+
+    // True if a YARG process is currently running (patching while it runs would fail/corrupt).
+    private static bool IsYargRunning() =>
+        System.Diagnostics.Process.GetProcessesByName("YARG").Length > 0;
+
     private void RunAction(string runningStatus, Action<string> action)
     {
         if (!CanAct)

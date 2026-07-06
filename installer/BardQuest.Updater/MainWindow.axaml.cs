@@ -32,4 +32,6 @@ public partial class MainWindow : Window
     private void OnRemove(object? sender, RoutedEventArgs e) => _vm.Remove();
 
     private async void OnCheck(object? sender, RoutedEventArgs e) => await _vm.CheckForUpdatesAsync();
+
+    private async void OnUpdate(object? sender, RoutedEventArgs e) => await _vm.UpdateAsync();
 }
