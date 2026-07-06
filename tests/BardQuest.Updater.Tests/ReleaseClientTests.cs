@@ -12,7 +12,7 @@ public class ReleaseClientTests
         ReleaseInfo? info = ReleaseClient.ParseLatestRelease(json);
 
         _ = Assert.NotNull(info);
-        Assert.Equal("v1.0.0", info!.Value.Tag);
+        Assert.Equal("v1.0.0", info.Value.Tag);
         Assert.Equal("https://example.test/BardQuest-v1.0.0.zip", info.Value.AssetUrl);
     }
 
