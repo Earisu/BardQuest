@@ -1,0 +1,18 @@
+<Project>
+  <ItemGroup>
+    <Reference Include="Assembly-CSharp" HintPath="$(YargManaged)/Assembly-CSharp.dll" Private="false" />
+    <Reference Include="UnityEngine" HintPath="$(YargManaged)/UnityEngine.dll" Private="false" />
+    <Reference Include="UnityEngine.CoreModule" HintPath="$(YargManaged)/UnityEngine.CoreModule.dll" Private="false" />
+    <Reference Include="UnityEngine.UIElementsModule" HintPath="$(YargManaged)/UnityEngine.UIElementsModule.dll" Private="false" />
+    <Reference Include="UnityEngine.TextRenderingModule" HintPath="$(YargManaged)/UnityEngine.TextRenderingModule.dll" Private="false" />
+    <Reference Include="Unity.InputSystem" HintPath="$(YargManaged)/Unity.InputSystem.dll" Private="false" />
+    <Reference Include="Unity.TextMeshPro" HintPath="$(YargManaged)/Unity.TextMeshPro.dll" Private="false" />
+    <Reference Include="YARG.Core.Package" HintPath="$(YargManaged)/YARG.Core.Package.dll" Private="false">
+      <Aliases>yargpkg</Aliases>
+    </Reference>
+  </ItemGroup>
+  <Target Name="CheckYargManaged" BeforeTargets="BeforeBuild">
+    <Error Condition="!Exists('$(YargManaged)/Assembly-CSharp.dll')"
+           Text="YargManaged not set or invalid. Pass -p:YargManaged=&lt;path-to-sandbox-Managed&gt;." />
+  </Target>
+</Project>
