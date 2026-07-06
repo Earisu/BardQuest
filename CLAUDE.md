@@ -23,4 +23,6 @@ An in-YARG Unity mod delivering RPG-style quest progression against your real YA
 
 ## Style
 
-- Code style enforced via root `.editorconfig`; run `dotnet format` before committing.
+- Code style enforced via root `.editorconfig` (Microsoft's documented .NET conventions, severities raised to `warning` so `dotnet format` actually applies them).
+- Before committing, run `dotnet format style`, `dotnet format analyzers`, and `dotnet format whitespace` against each project individually (`src/BardQuest.Domain`, `mod/BardQuest.Mod`, `installer/BardQuest.Installer`, `tests/BardQuest.Installer.Tests`) — never against `BardQuest.slnx` or `lib/YARG.Core`, since solution-wide formatting would also rewrite the vendored submodule.
+- Rider users: `BardQuest.sln.DotSettings` (committed) mirrors this in ReSharper/Rider's own settings layer.
