@@ -1,6 +1,3 @@
-using System;
-using System.IO;
-
 namespace BardQuest.Installer;
 
 internal static class Program
@@ -42,10 +39,14 @@ internal static class Program
 
     private static void CopyDlls(string dllSourceDir, string managedDir)
     {
-        foreach (var name in new[] { "BardQuest.Mod.dll", "BardQuest.Domain.dll", "YARG.Core.dll" })
+        foreach (string? name in new[] { "BardQuest.Mod.dll", "BardQuest.Domain.dll", "YARG.Core.dll" })
         {
-            var src = Path.Combine(dllSourceDir, name);
-            if (!File.Exists(src)) throw new FileNotFoundException("Missing DLL to deploy: " + src);
+            string src = Path.Combine(dllSourceDir, name);
+            if (!File.Exists(src))
+            {
+                throw new FileNotFoundException("Missing DLL to deploy: " + src);
+            }
+
             File.Copy(src, Path.Combine(managedDir, name), overwrite: true);
         }
     }

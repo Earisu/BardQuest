@@ -1,110 +1,134 @@
-using System;
 using System.Reflection;
+
 using TMPro;
+
 using UnityEngine;
 using UnityEngine.Events;
+
+using YARG.Localization;
 using YARG.Menu.Main;
 using YARG.Menu.Navigation;
 
-namespace BardQuest.Mod
+namespace BardQuest.Mod;
+
+internal static class MainMenuEntry
 {
-    internal static class MainMenuEntry
+    private const string EntryName = "BardQuestEntry";
+    private const string QuickplayKey = "Menu.Main.Options.Quickplay";
+    private const string Label = "BARDQUEST";
+    private static readonly Color BardQuestColor = new Color32(0x8A, 0x63, 0xD2, 0xFF); // BardQuest accent
+
+    private static readonly BindingFlags Priv = BindingFlags.Instance | BindingFlags.NonPublic;
+
+    public static void Ensure(BardQuestManager manager, MainMenu mainMenu)
     {
-        private const string EntryName = "BardQuestEntry";
-        private const string QuickplayKey = "Menu.Main.Options.Quickplay";
-        private const string Label = "BARDQUEST";
-        private static readonly Color BardQuestColor = new Color32(0x8A, 0x63, 0xD2, 0xFF); // BardQuest accent
-
-        private static readonly BindingFlags Priv = BindingFlags.Instance | BindingFlags.NonPublic;
-
-        public static void Ensure(BardQuestManager manager, MainMenu mainMenu)
+        try
         {
-            try
+            NavigatableButton template = FindQuickplayButton(mainMenu);
+            if (template == null) { ModLog.Warn("Quickplay template not found; entry skipped."); return; }
+
+            Transform container = template.transform.parent;
+            if (container.Find(EntryName) != null)
             {
-                var template = FindQuickplayButton(mainMenu);
-                if (template == null) { ModLog.Warn("Quickplay template not found; entry skipped."); return; }
+                return; // idempotent (OnEnable fires repeatedly)
+            }
 
-                var container = template.transform.parent;
-                if (container.Find(EntryName) != null) return; // idempotent (OnEnable fires repeatedly)
+            GameObject clone = UnityEngine.Object.Instantiate(template.gameObject, container);
+            clone.name = EntryName;
+            clone.transform.SetSiblingIndex(template.transform.GetSiblingIndex() + 1);
 
-                var clone = UnityEngine.Object.Instantiate(template.gameObject, container);
-                clone.name = EntryName;
-                clone.transform.SetSiblingIndex(template.transform.GetSiblingIndex() + 1);
+            StripLocalization(clone);
+            SetLabelAndColor(clone);
+            FixSelectedVisual(clone);
 
-                StripLocalization(clone);
-                SetLabelAndColor(clone);
-                FixSelectedVisual(clone);
+            NavigatableButton button = clone.GetComponent<NavigatableButton>();
+            DisablePersistentClicks(button);
+            button.SetOnClickEvent(manager.OpenCanvas);
 
-                var button = clone.GetComponent<NavigatableButton>();
-                DisablePersistentClicks(button);
-                button.SetOnClickEvent(() => manager.OpenCanvas());
-
-                var navGroup = container.GetComponent<NavigationGroup>();
-                if (navGroup != null)
+            NavigationGroup navGroup = container.GetComponent<NavigationGroup>();
+            if (navGroup != null)
+            {
+                navGroup.AddNavigatable(button);
+                // AddNavigatable appends to NavigationGroup's ordered _navigatables list, so nav order
+                // would not match visual order. Re-place our entry immediately after Quickplay.
+                FieldInfo navListField = typeof(NavigationGroup).GetField("_navigatables", Priv);
+                if (navListField?.GetValue(navGroup) is List<NavigatableBehaviour> navList)
                 {
-                    navGroup.AddNavigatable(button);
-                    // AddNavigatable appends to NavigationGroup's ordered _navigatables list, so nav order
-                    // would not match visual order. Re-place our entry immediately after Quickplay.
-                    var navListField = typeof(NavigationGroup).GetField("_navigatables", Priv);
-                    if (navListField?.GetValue(navGroup) is List<NavigatableBehaviour> navList)
+                    _ = navList.Remove(button);
+                    int quickplayIndex = navList.IndexOf(template);
+                    if (quickplayIndex >= 0)
                     {
-                        navList.Remove(button);
-                        int quickplayIndex = navList.IndexOf(template);
-                        if (quickplayIndex >= 0) navList.Insert(quickplayIndex + 1, button);
-                        else navList.Add(button);
+                        navList.Insert(quickplayIndex + 1, button);
+                    }
+                    else
+                    {
+                        navList.Add(button);
                     }
                 }
-                ModLog.Info("Menu entry added.");
             }
-            catch (Exception ex) { ModLog.Error("Menu entry injection failed: " + ex); }
+            ModLog.Info("Menu entry added.");
         }
+        catch (Exception ex) { ModLog.Error("Menu entry injection failed: " + ex); }
+    }
 
-        private static NavigatableButton FindQuickplayButton(MainMenu mainMenu)
+    private static NavigatableButton FindQuickplayButton(MainMenu mainMenu)
+    {
+        FieldInfo keyField = typeof(LocalizeText).GetField("_localizationKey", Priv);
+        foreach (LocalizeText loc in mainMenu.GetComponentsInChildren<LocalizeText>(true))
         {
-            var keyField = typeof(YARG.Localization.LocalizeText).GetField("_localizationKey", Priv);
-            foreach (var loc in mainMenu.GetComponentsInChildren<YARG.Localization.LocalizeText>(true))
+            if ((keyField?.GetValue(loc) as string) == QuickplayKey)
             {
-                if ((keyField?.GetValue(loc) as string) == QuickplayKey)
-                    return loc.GetComponentInParent<NavigatableButton>();
+                return loc.GetComponentInParent<NavigatableButton>();
             }
-            return null;
         }
+        return null;
+    }
 
-        private static void StripLocalization(GameObject clone)
+    private static void StripLocalization(GameObject clone)
+    {
+        foreach (LocalizeText loc in clone.GetComponentsInChildren<LocalizeText>(true))
         {
-            foreach (var loc in clone.GetComponentsInChildren<YARG.Localization.LocalizeText>(true))
-                UnityEngine.Object.DestroyImmediate(loc);
+            UnityEngine.Object.DestroyImmediate(loc);
         }
+    }
 
-        private static void SetLabelAndColor(GameObject clone)
+    private static void SetLabelAndColor(GameObject clone)
+    {
+        foreach (TMP_Text text in clone.GetComponentsInChildren<TMP_Text>(true))
         {
-            foreach (var text in clone.GetComponentsInChildren<TMP_Text>(true))
+            text.text = Label;
+            text.color = BardQuestColor;
+        }
+        // Overwrite the colorizer's captured defaults so the deselected color is BardQuest's.
+        foreach (NavigationTextColorizer colorizer in clone.GetComponentsInChildren<NavigationTextColorizer>(true))
+        {
+            if (typeof(NavigationTextColorizer).GetField("_defaultColors", Priv)?.GetValue(colorizer) is Color[] defaults)
             {
-                text.text = Label;
-                text.color = BardQuestColor;
-            }
-            // Overwrite the colorizer's captured defaults so the deselected color is BardQuest's.
-            foreach (var colorizer in clone.GetComponentsInChildren<NavigationTextColorizer>(true))
-            {
-                var defaults = typeof(NavigationTextColorizer).GetField("_defaultColors", Priv)?.GetValue(colorizer) as Color[];
-                if (defaults != null)
-                    for (int i = 0; i < defaults.Length; i++) defaults[i] = BardQuestColor;
+                for (int i = 0; i < defaults.Length; i++)
+                {
+                    defaults[i] = BardQuestColor;
+                }
             }
         }
+    }
 
-        private static void FixSelectedVisual(GameObject clone)
+    private static void FixSelectedVisual(GameObject clone)
+    {
+        NavigatableBehaviour beh = clone.GetComponent<NavigatableBehaviour>();
+        var selected = typeof(NavigatableBehaviour).GetField("_selectedVisual", Priv)?.GetValue(beh) as GameObject;
+        selected?.SetActive(false);
+    }
+
+    private static void DisablePersistentClicks(NavigatableButton button)
+    {
+        if (typeof(NavigatableButton).GetField("_onClick", Priv)?.GetValue(button) is not UnityEventBase onClick)
         {
-            var beh = clone.GetComponent<NavigatableBehaviour>();
-            var selected = typeof(NavigatableBehaviour).GetField("_selectedVisual", Priv)?.GetValue(beh) as GameObject;
-            if (selected != null) selected.SetActive(false);
+            return;
         }
 
-        private static void DisablePersistentClicks(NavigatableButton button)
+        for (int i = 0; i < onClick.GetPersistentEventCount(); i++)
         {
-            var onClick = typeof(NavigatableButton).GetField("_onClick", Priv)?.GetValue(button) as UnityEventBase;
-            if (onClick == null) return;
-            for (int i = 0; i < onClick.GetPersistentEventCount(); i++)
-                onClick.SetPersistentListenerState(i, UnityEventCallState.Off);
+            onClick.SetPersistentListenerState(i, UnityEventCallState.Off);
         }
     }
 }

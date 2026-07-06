@@ -1,19 +1,19 @@
-using System.IO;
-using System.Linq;
-using BardQuest.Installer;
 using Mono.Cecil;
 using Mono.Cecil.Cil;
+
 using Xunit;
+
+namespace BardQuest.Installer.Tests;
 
 public class SeamPatcherTests
 {
     // Builds a synthetic assembly with a MainMenu-shaped type + OnEnable, patches it, asserts the seam.
     private static string BuildSyntheticManagedDir(string root)
     {
-        Directory.CreateDirectory(root);
+        _ = Directory.CreateDirectory(root);
         var asm = AssemblyDefinition.CreateAssembly(
-            new AssemblyNameDefinition("Assembly-CSharp", new System.Version(1, 0)), "Assembly-CSharp", ModuleKind.Dll);
-        var module = asm.MainModule;
+            new AssemblyNameDefinition("Assembly-CSharp", new Version(1, 0)), "Assembly-CSharp", ModuleKind.Dll);
+        ModuleDefinition module = asm.MainModule;
 
         var mainMenu = new TypeDefinition("YARG.Menu.Main", "MainMenu",
             TypeAttributes.Public | TypeAttributes.Class, module.TypeSystem.Object);
@@ -21,7 +21,7 @@ public class SeamPatcherTests
 
         var onEnable = new MethodDefinition("OnEnable",
             MethodAttributes.Public | MethodAttributes.HideBySig, module.TypeSystem.Void);
-        var il = onEnable.Body.GetILProcessor();
+        ILProcessor il = onEnable.Body.GetILProcessor();
         il.Append(il.Create(OpCodes.Ret));
         mainMenu.Methods.Add(onEnable);
 
@@ -31,7 +31,7 @@ public class SeamPatcherTests
         var onMenu = new MethodDefinition("OnMainMenuEnabled",
             MethodAttributes.Public | MethodAttributes.Static, module.TypeSystem.Void);
         onMenu.Parameters.Add(new ParameterDefinition(mainMenu));
-        var bil = onMenu.Body.GetILProcessor();
+        ILProcessor bil = onMenu.Body.GetILProcessor();
         bil.Append(bil.Create(OpCodes.Ret));
         bootstrap.Methods.Add(onMenu);
         module.Types.Add(bootstrap);
@@ -43,7 +43,7 @@ public class SeamPatcherTests
     [Fact]
     public void Patch_InjectsCallAndMarker_AndIsIdempotent()
     {
-        var dir = BuildSyntheticManagedDir(Path.Combine(Path.GetTempPath(), "bq-seam-" + System.Guid.NewGuid()));
+        var dir = BuildSyntheticManagedDir(Path.Combine(Path.GetTempPath(), "bq-seam-" + Guid.NewGuid()));
         try
         {
             SeamPatcher.Patch(dir);
@@ -51,9 +51,9 @@ public class SeamPatcherTests
             using var patched = ModuleDefinition.ReadModule(Path.Combine(dir, "Assembly-CSharp.dll"));
             Assert.True(SeamPatcher.IsPatched(patched));
 
-            var onEnable = patched.GetType("YARG.Menu.Main.MainMenu").Methods.Single(m => m.Name == "OnEnable");
-            var first = onEnable.Body.Instructions[0];
-            var call = onEnable.Body.Instructions[1];
+            MethodDefinition onEnable = patched.GetType("YARG.Menu.Main.MainMenu").Methods.Single(m => m.Name == "OnEnable");
+            Instruction first = onEnable.Body.Instructions[0];
+            Instruction call = onEnable.Body.Instructions[1];
             Assert.Equal(OpCodes.Ldarg_0, first.OpCode);
             Assert.Equal(OpCodes.Call, call.OpCode);
             Assert.Equal("OnMainMenuEnabled", ((MethodReference)call.Operand).Name);
@@ -62,7 +62,7 @@ public class SeamPatcherTests
             Assert.True(File.Exists(Path.Combine(dir, "Assembly-CSharp.dll.bardquest-bak")));
             SeamPatcher.Patch(dir);
             using var repatched = ModuleDefinition.ReadModule(Path.Combine(dir, "Assembly-CSharp.dll"));
-            var oe2 = repatched.GetType("YARG.Menu.Main.MainMenu").Methods.Single(m => m.Name == "OnEnable");
+            MethodDefinition oe2 = repatched.GetType("YARG.Menu.Main.MainMenu").Methods.Single(m => m.Name == "OnEnable");
             Assert.Equal(OpCodes.Ldarg_0, oe2.Body.Instructions[0].OpCode);
             Assert.Equal(OpCodes.Call, oe2.Body.Instructions[1].OpCode);
             // Exactly one call to our method.
