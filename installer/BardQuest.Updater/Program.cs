@@ -13,7 +13,7 @@ internal static class Program
             switch (args.Length >= 1 ? args[0] : "")
             {
                 case "install":
-                    CopyDlls(args[2], args[1]);
+                    ModDeployer.Copy(args[2], args[1]);
                     SeamPatcher.Patch(args[1]);
                     Console.WriteLine("BardQuest installed.");
                     return 0;
@@ -34,20 +34,6 @@ internal static class Program
         {
             Console.Error.WriteLine("ERROR: " + ex.Message);
             return 2;
-        }
-    }
-
-    private static void CopyDlls(string dllSourceDir, string managedDir)
-    {
-        foreach (string? name in new[] { "BardQuest.Mod.dll", "BardQuest.Domain.dll", "YARG.Core.dll" })
-        {
-            string src = Path.Combine(dllSourceDir, name);
-            if (!File.Exists(src))
-            {
-                throw new FileNotFoundException("Missing DLL to deploy: " + src);
-            }
-
-            File.Copy(src, Path.Combine(managedDir, name), overwrite: true);
         }
     }
 }

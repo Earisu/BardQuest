@@ -80,4 +80,37 @@ public static class SeamPatcher
             File.Delete(backup);
         }
     }
+
+    // True if the live Assembly-CSharp.dll in managedDir carries the seam marker.
+    public static bool IsManagedDirPatched(string managedDir)
+    {
+        string live = Path.Combine(managedDir, "Assembly-CSharp.dll");
+        if (!File.Exists(live))
+        {
+            return false;
+        }
+
+        using var module = ModuleDefinition.ReadModule(live);
+        return IsPatched(module);
+    }
+
+    // Launcher-clobber-safe patch entry point. If the live DLL is already patched, does nothing.
+    // Otherwise discards any stale backup (the YARC launcher may have replaced Assembly-CSharp.dll
+    // with a newer pristine one, leaving our old .bardquest-bak — patching from that would revert
+    // YARG), so the current live DLL becomes the fresh baseline, then patches.
+    public static void EnsurePatched(string managedDir)
+    {
+        if (IsManagedDirPatched(managedDir))
+        {
+            return;
+        }
+
+        string backup = Path.Combine(managedDir, "Assembly-CSharp.dll.bardquest-bak");
+        if (File.Exists(backup))
+        {
+            File.Delete(backup);
+        }
+
+        Patch(managedDir);
+    }
 }
