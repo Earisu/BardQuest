@@ -12,4 +12,7 @@
   <ItemGroup>
     <ProjectReference Include="../../installer/BardQuest.Updater.Core/BardQuest.Updater.Core.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <None Update="Fixtures/github-releases.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>
