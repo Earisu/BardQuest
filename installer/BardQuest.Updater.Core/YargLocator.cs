@@ -8,6 +8,27 @@ public static class YargLocator
     public static bool IsValidManagedDir(string managedDir) =>
         File.Exists(Path.Combine(managedDir, "Assembly-CSharp.dll"));
 
+    // Walks up from a Managed folder looking for an install's tag.txt (YARC layout:
+    // <install>/tag.txt with the Managed folder nested under <install>/installation/...).
+    // Returns the trimmed tag, or null if none is found within 8 levels.
+    public static string? TagFromManagedDir(string managedDir)
+    {
+        DirectoryInfo? dir = new(managedDir);
+        for (int i = 0; i < 8 && dir is not null; i++)
+        {
+            string tagFile = Path.Combine(dir.FullName, "tag.txt");
+            if (File.Exists(tagFile))
+            {
+                string tag = File.ReadAllText(tagFile).Trim();
+                return tag.Length == 0 ? null : tag;
+            }
+
+            dir = dir.Parent;
+        }
+
+        return null;
+    }
+
     // The Managed folder's path relative to an install's "installation/" directory.
     public static string ManagedSubpath() =>
         OperatingSystem.IsMacOS()

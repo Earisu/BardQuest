@@ -54,4 +54,29 @@ public class YargLocatorTests
         string root = Path.Combine(Path.GetTempPath(), "bq-none-" + Guid.NewGuid());
         Assert.Empty(YargLocator.DiscoverLauncherInstalls(root));
     }
+
+    [Fact]
+    public void TagFromManagedDir_FindsTag_ByWalkingUp()
+    {
+        string root = Path.Combine(Path.GetTempPath(), "bq-tag-" + Guid.NewGuid());
+        try
+        {
+            string managed = MakeInstall(root, "guid-stable", "v0.15.0");
+            Assert.Equal("v0.15.0", YargLocator.TagFromManagedDir(managed));
+        }
+        finally { Directory.Delete(root, recursive: true); }
+    }
+
+    [Fact]
+    public void TagFromManagedDir_ReturnsNull_WhenNoTagAbove()
+    {
+        string root = Path.Combine(Path.GetTempPath(), "bq-notag-" + Guid.NewGuid());
+        string managed = Path.Combine(root, "a", "b", "Managed");
+        _ = Directory.CreateDirectory(managed);
+        try
+        {
+            Assert.Null(YargLocator.TagFromManagedDir(managed));
+        }
+        finally { Directory.Delete(root, recursive: true); }
+    }
 }
