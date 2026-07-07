@@ -139,22 +139,6 @@ public sealed class MainViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(CanAct));
     }
 
-    // Copy the mod DLLs from sourceDir into managed, ensure the seam is patched
-    // (launcher-clobber-safe), and record the installed version. Shared by Install and Update.
-    private void ApplyModDlls(string sourceDir, string version, string managed)
-    {
-        if (!File.Exists(Path.Combine(sourceDir, "BardQuest.Mod.dll")))
-        {
-            throw new FileNotFoundException($"Mod DLLs not found (expected in '{sourceDir}').");
-        }
-
-        ModDeployer.Copy(sourceDir, managed);
-        SeamPatcher.EnsurePatched(managed);
-        _config.InstalledVersion = version;
-        _config.LastCheckUtc = DateTime.UtcNow;
-        _config.Save(_configPath);
-    }
-
     public async Task InstallAsync()
     {
         if (!CanAct)
@@ -203,32 +187,33 @@ public sealed class MainViewModel : INotifyPropertyChanged
         }
     }
 
-    // Download rel into temp, validate the mod DLLs, gate the downloaded build's YARG
-    // target against the selected install, and apply. Returns the applied version, or
-    // null if it aborted (Status is already set to the reason). Temp is cleaned by the caller.
+    // Download rel into temp, gate the downloaded build's YARG target against the selected
+    // install, and apply. Returns the applied version, or null if it aborted (Status set to
+    // the reason). Temp is cleaned by the caller.
     private async Task<string?> DownloadGateApplyAsync(ReleaseInfo rel, string managed, string temp, string abortVerb)
     {
         Status = $"Downloading mod {rel.Tag}…";
-        _ = await Download(rel.AssetUrl, temp);
-
-        string? extracted = ReleaseDownloader.ValidateExtracted(temp);
-        if (extracted is null)
-        {
-            Status = "Downloaded release did not contain the expected mod files.";
-            return null;
-        }
-
-        ModAssemblyInfo downloaded = ModAssemblyReader.Read(Path.Combine(extracted, "BardQuest.Mod.dll"));
+        using var http = new HttpClient();
+        http.DefaultRequestHeaders.UserAgent.ParseAdd("BardQuest-Updater");
         string? installTag = CurrentInstallTag();
-        if (YargCompat.Evaluate(downloaded.YargTarget, installTag) == Compatibility.Incompatible)
-        {
-            Status = $"⚠ This mod targets YARG {downloaded.YargTarget}; selected install is {installTag}. {abortVerb} aborted.";
-            return null;
-        }
 
-        string version = downloaded.ModVersion ?? rel.Tag;
-        ApplyModDlls(extracted, version, managed);
-        return version;
+        ApplyResult result = await ModUpdateApplier.DownloadGateApplyAsync(http, rel, temp, installTag, managed);
+        switch (result.Outcome)
+        {
+            case ApplyOutcome.MissingFiles:
+                Status = "Downloaded release did not contain the expected mod files.";
+                return null;
+            case ApplyOutcome.Incompatible:
+                Status = $"⚠ This mod targets YARG {result.ModTarget}; selected install is {installTag}. {abortVerb} aborted.";
+                return null;
+            case ApplyOutcome.Applied:
+            default:
+                string version = result.Version ?? rel.Tag;
+                _config.InstalledVersion = version;
+                _config.LastCheckUtc = DateTime.UtcNow;
+                _config.Save(_configPath);
+                return version;
+        }
     }
 
     private static async Task<ReleaseInfo?> FetchLatestModAsync()
@@ -357,13 +342,6 @@ public sealed class MainViewModel : INotifyPropertyChanged
             Busy = false;
             RefreshInstalledDisplay();
         }
-    }
-
-    private static async Task<string> Download(string assetUrl, string destDir)
-    {
-        using var http = new HttpClient();
-        http.DefaultRequestHeaders.UserAgent.ParseAdd("BardQuest-Updater");
-        return await ReleaseDownloader.DownloadAndExtractAsync(http, assetUrl, destDir);
     }
 
     // True if a YARG process is currently running (patching while it runs would fail/corrupt).
