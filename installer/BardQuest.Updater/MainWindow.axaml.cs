@@ -27,7 +27,7 @@ public partial class MainWindow : Window
         }
     }
 
-    private void OnInstall(object? sender, RoutedEventArgs e) => _vm.Install();
+    private async void OnInstall(object? sender, RoutedEventArgs e) => await _vm.InstallAsync();
 
     private void OnRemove(object? sender, RoutedEventArgs e) => _vm.Remove();
 
