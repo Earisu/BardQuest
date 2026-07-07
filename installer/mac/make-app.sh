@@ -56,4 +56,12 @@ ${ICON_PLIST}
 </plist>
 PLIST
 
+# Ad-hoc code-sign the finished bundle. On Apple Silicon a quarantined .app with
+# no bundle signature is reported by Gatekeeper as "damaged and can't be opened"
+# (not the right-click-Open-able "unidentified developer"). An ad-hoc signature
+# (identity "-") needs no certificate and downgrades that to the bypassable state.
+if command -v codesign >/dev/null 2>&1; then
+  codesign --force --deep --sign - "$APP"
+fi
+
 echo "Built $APP"

@@ -56,7 +56,12 @@ jobs:
         if: matrix.rid == 'osx-arm64'
         run: |
           bash installer/mac/make-app.sh publish/osx-arm64 "${{ steps.v.outputs.version }}" dist
-          (cd dist && zip -qry "$GITHUB_WORKSPACE/BardQuest-Updater-${{ steps.v.outputs.version }}-osx-arm64.zip" "BardQuest Updater.app")
+          # ditto (not zip) preserves the bundle's code signature and metadata — a
+          # plain zip round-trip can invalidate the ad-hoc signature and re-trigger
+          # the "damaged" Gatekeeper error on the downloaded app.
+          ditto -c -k --sequesterRsrc --keepParent \
+            "dist/BardQuest Updater.app" \
+            "$GITHUB_WORKSPACE/BardQuest-Updater-${{ steps.v.outputs.version }}-osx-arm64.zip"
 
       - name: Package Linux
         if: matrix.rid == 'linux-x64'
