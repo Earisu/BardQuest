@@ -22,12 +22,18 @@ internal static class Program
         return 0;
     }
 
-    // True when launched by the login item to run headless in the tray.
+    // True when launched by the login item: start quietly with just the tray icon
+    // (no window shown). A normal launch opens the window. Either way the app runs
+    // in the menu bar until the user quits from the tray.
     public static bool TrayMode { get; private set; }
 
     public static AppBuilder BuildAvaloniaApp() =>
         AppBuilder.Configure<App>()
             .UsePlatformDetect()
+            // Menu-bar-only app: no Dock icon. Avalonia forces a Regular activation policy
+            // at startup (overriding the bundle's LSUIElement), so this is the switch that
+            // actually keeps the updater out of the Dock.
+            .With(new MacOSPlatformOptions { ShowInDock = false })
             .LogToTrace();
 
     private static int RunCli(string[] args)

@@ -19,23 +19,30 @@ public partial class App : Application
     {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
-            if (Program.TrayMode)
-            {
-                desktop.ShutdownMode = ShutdownMode.OnExplicitShutdown;
-                _tray = BuildTrayIcon(desktop);
+            // Tray-first: the app always lives in the menu bar and only exits via the
+            // tray's Quit. Closing the window hides it back to the tray; the background
+            // update service runs the whole time.
+            desktop.ShutdownMode = ShutdownMode.OnExplicitShutdown;
+            _tray = BuildTrayIcon(desktop);
 
-                desktop.ShutdownRequested += (_, _) => _background?.Stop();
-                _background = new BackgroundUpdateService(
-                    UpdaterConfig.DefaultPath(),
-                    text => Dispatcher.UIThread.Post(() =>
-                    {
-                        _tray?.ToolTipText = text;
-                    }));
-                _background.Start();
-            }
-            else
+            // On macOS a bare TrayIcon instance does not show a menu-bar status item
+            // unless it is registered in the Application's TrayIcons collection.
+            TrayIcon.SetIcons(this, [_tray]);
+
+            desktop.ShutdownRequested += (_, _) => _background?.Stop();
+            _background = new BackgroundUpdateService(
+                UpdaterConfig.DefaultPath(),
+                text => Dispatcher.UIThread.Post(() =>
+                {
+                    _tray?.ToolTipText = text;
+                }));
+            _background.Start();
+
+            // A login launch (--tray) starts quietly with just the tray icon; a normal
+            // launch opens the window.
+            if (!Program.TrayMode)
             {
-                desktop.MainWindow = new MainWindow();
+                ShowWindow();
             }
         }
 
