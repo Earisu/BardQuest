@@ -18,6 +18,10 @@ public sealed class BackgroundUpdateService(string configPath, Action<string> se
     private string? _pendingVersion;
     private bool _watching;
 
+    // Serializes ApplyPending so the fast-watch loop and a manual "Check now" can never
+    // run the file-copy/seam-patch against the same managed dir concurrently.
+    private readonly Lock _applyLock = new();
+
     public void Start() => _ = RunLoopAsync(_cts.Token);
 
     public void Stop()
@@ -157,34 +161,44 @@ public sealed class BackgroundUpdateService(string configPath, Action<string> se
     // NeedsAttention on any non-Applied outcome and leaves the prior install intact.
     private void ApplyPending(string managed)
     {
-        string? extracted = _pendingDir is null ? null : ReleaseDownloader.ValidateExtracted(_pendingDir);
-        if (extracted is null)
+        lock (_applyLock)
         {
-            return;
-        }
-
-        try
-        {
-            string? installTag = YargLocator.TagFromManagedDir(managed);
-            ApplyResult result = ModUpdateApplier.GateAndApply(extracted, installTag, managed);
-            var config = UpdaterConfig.Load(_configPath);
-            if (result.Outcome == ApplyOutcome.Applied)
+            string? extracted = _pendingDir is null ? null : ReleaseDownloader.ValidateExtracted(_pendingDir);
+            if (extracted is null)
             {
-                config.InstalledVersion = result.Version ?? _pendingVersion;
-                config.HeldVersion = null;
-                config.Save(_configPath);
-                _setTooltip($"BardQuest — updated to {config.InstalledVersion}");
-                CleanupPending();
+                if (_pendingDir is not null)
+                {
+                    // Held download exists but is invalid/corrupt — discard so the next poll re-fetches.
+                    CleanupPending();
+                    _setTooltip("BardQuest — update needs attention (open the updater)");
+                }
+
+                return;
             }
-            else
+
+            try
+            {
+                string? installTag = YargLocator.TagFromManagedDir(managed);
+                ApplyResult result = ModUpdateApplier.GateAndApply(extracted, installTag, managed);
+                var config = UpdaterConfig.Load(_configPath);
+                if (result.Outcome == ApplyOutcome.Applied)
+                {
+                    config.InstalledVersion = result.Version ?? _pendingVersion;
+                    config.HeldVersion = null;
+                    config.Save(_configPath);
+                    _setTooltip($"BardQuest — updated to {config.InstalledVersion}");
+                    CleanupPending();
+                }
+                else
+                {
+                    _setTooltip("BardQuest — update needs attention (open the updater)");
+                }
+            }
+            catch (Exception ex)
             {
                 _setTooltip("BardQuest — update needs attention (open the updater)");
+                System.Diagnostics.Debug.WriteLine("BardQuest auto-apply: " + ex);
             }
-        }
-        catch (Exception ex)
-        {
-            _setTooltip("BardQuest — update needs attention (open the updater)");
-            System.Diagnostics.Debug.WriteLine("BardQuest auto-apply: " + ex);
         }
     }
 
