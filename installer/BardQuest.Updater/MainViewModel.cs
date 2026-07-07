@@ -9,6 +9,9 @@ public sealed class MainViewModel : INotifyPropertyChanged
     private readonly string _configPath;
     private readonly UpdaterConfig _config;
 
+    private IAutoStartManager AutoStart =>
+        field ??= AutoStartManager.ForCurrentOs(Environment.ProcessPath ?? "");
+
     public MainViewModel() : this(UpdaterConfig.DefaultPath()) { }
 
     public MainViewModel(string configPath)
@@ -110,6 +113,33 @@ public sealed class MainViewModel : INotifyPropertyChanged
     // Remove / Check are allowed whenever a valid Managed dir is selected and we're idle.
     public bool CanAct => HasManagedDir && !Busy;
 
+    // Single opt-out setting: registers/removes the login item that runs the background
+    // tray updater, and gates whether it auto-applies. Persisted in AutoStartEnabled.
+    public bool AutoUpdateEnabled
+    {
+        get => _config.AutoStartEnabled;
+        set
+        {
+            if (_config.AutoStartEnabled == value)
+            {
+                return;
+            }
+
+            _config.AutoStartEnabled = value;
+            _config.Save(_configPath);
+            try
+            {
+                if (value) { AutoStart.Enable(); } else { AutoStart.Disable(); }
+            }
+            catch (Exception ex)
+            {
+                Status = "Could not change the login item: " + ex.Message;
+            }
+
+            OnPropertyChanged();
+        }
+    }
+
     public string InstalledDisplay
     {
         get;
@@ -172,6 +202,11 @@ public sealed class MainViewModel : INotifyPropertyChanged
             string? version = await DownloadGateApplyAsync(rel, managed, temp, "Install");
             if (version is not null)
             {
+                if (!_config.AutoStartEnabled)
+                {
+                    AutoUpdateEnabled = true; // default ON on first install; registers the login item
+                }
+
                 Status = $"Installed {version}.";
             }
         }
