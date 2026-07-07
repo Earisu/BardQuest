@@ -17,9 +17,13 @@ internal static class Program
             return RunCli(args);
         }
 
+        TrayMode = args.Contains("--tray");
         _ = BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
         return 0;
     }
+
+    // True when launched by the login item to run headless in the tray.
+    public static bool TrayMode { get; private set; }
 
     public static AppBuilder BuildAvaloniaApp() =>
         AppBuilder.Configure<App>()
