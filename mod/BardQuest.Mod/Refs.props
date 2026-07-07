@@ -4,6 +4,11 @@
        -p:YargManaged=<path> to build against another YARG install. -->
   <PropertyGroup>
     <YargManaged Condition="'$(YargManaged)' == ''">$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)../../yarg-sandbox/YARG.app/Contents/Resources/Data/Managed'))</YargManaged>
+    <!-- The YARG version this mod is built against. Baked into the BardQuestYargTarget
+         marker (see BardQuest.Mod.csproj) and read back by CI to choose which YARG to
+         download. Single source of truth: bump this one line to target a new YARG.
+         Overridable for a throwaway local build via -p:YargTarget=<version>. -->
+    <YargTarget Condition="'$(YargTarget)' == ''">0.15.0</YargTarget>
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="Assembly-CSharp" HintPath="$(YargManaged)/Assembly-CSharp.dll" Private="false" />
