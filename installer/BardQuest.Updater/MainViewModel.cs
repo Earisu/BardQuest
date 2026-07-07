@@ -282,6 +282,53 @@ public sealed class MainViewModel : INotifyPropertyChanged
         });
     }
 
+    // Passive check run when the window opens: fetch the latest published release and show
+    // what's available. Unlike the "Check for updates" button it never mutates the install
+    // (no seam re-apply) and works even before a YARG install is selected.
+    public async Task CheckOnLaunchAsync()
+    {
+        if (Busy)
+        {
+            return;
+        }
+
+        Busy = true;
+        Status = "Checking for the latest BardQuest…";
+        try
+        {
+            ReleaseInfo? latest = await FetchLatestModAsync();
+            CandidateDisplay = latest?.Tag ?? "(none published)";
+            if (latest is { } rel)
+            {
+                if (HasManagedDir)
+                {
+                    bool seamPresent = SeamPatcher.IsManagedDirPatched(_config.ManagedDir!);
+                    UpdateStatus status = UpdateEvaluator.Evaluate(_config, latest, seamPresent);
+                    Status = status.ModUpdateAvailable
+                        ? $"Update available: {status.AvailableVersion}. Close YARG, then click Update."
+                        : status.Installed ? "BardQuest is up to date."
+                        : $"BardQuest {rel.Tag} is available — click Install.";
+                }
+                else
+                {
+                    Status = $"BardQuest {rel.Tag} is available — select your YARG install, then click Install.";
+                }
+            }
+            else
+            {
+                Status = "No BardQuest release found on GitHub yet.";
+            }
+
+            _config.LastCheckUtc = DateTime.UtcNow;
+            _config.Save(_configPath);
+        }
+        catch (Exception ex)
+        {
+            Status = "Update check failed: " + ex.Message;
+        }
+        finally { Busy = false; RefreshInstalledDisplay(); }
+    }
+
     public async Task CheckForUpdatesAsync()
     {
         if (!CanAct)
