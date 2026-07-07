@@ -1,0 +1,71 @@
+name: Build BardQuest mod
+description: Reads the pinned YARG version from the mod project, fetches that YARG's managed DLLs, and builds BardQuest.Mod against them.
+inputs:
+  mod-version:
+    description: Version stamped on the mod (BardQuestModVersion)
+    required: false
+    default: 0.0.0
+  configuration:
+    description: dotnet configuration
+    required: false
+    default: Release
+outputs:
+  dll-dir:
+    description: Absolute path to the mod build output dir (holds the 3 deploy DLLs)
+    value: ${{ steps.build.outputs.dll-dir }}
+  yarg-version:
+    description: The resolved YARG version the mod was built against
+    value: ${{ steps.resolve.outputs.yarg-version }}
+runs:
+  using: composite
+  steps:
+    - name: Resolve YARG version from the mod project
+      id: resolve
+      shell: bash
+      run: |
+        set -euo pipefail
+        yarg="$(dotnet msbuild mod/BardQuest.Mod/BardQuest.Mod.csproj -getProperty:YargTarget)"
+        yarg="$(printf '%s' "$yarg" | tr -d '[:space:]')"
+        test -n "$yarg" || { echo "::error::YargTarget property is empty"; exit 1; }
+        echo "yarg-version=$yarg" >> "$GITHUB_OUTPUT"
+
+    - name: Cache YARG managed DLLs
+      id: cache
+      uses: actions/cache@v4
+      with:
+        path: yarg-managed
+        key: yarg-managed-${{ steps.resolve.outputs.yarg-version }}
+
+    - name: Download + extract YARG managed DLLs
+      if: steps.cache.outputs.cache-hit != 'true'
+      shell: bash
+      run: |
+        set -euo pipefail
+        yarg="${{ steps.resolve.outputs.yarg-version }}"
+        url="https://github.com/YARC-Official/YARG/releases/download/v${yarg}/YARG_v${yarg}-Linux-x86_64.zip"
+        echo "Downloading $url"
+        curl -sSL -o yarg.zip "$url"
+        mkdir -p yarg-unzip
+        unzip -q yarg.zip -d yarg-unzip
+        managed="$(find yarg-unzip -type d -name Managed -path '*_Data/Managed' | head -1)"
+        test -n "$managed" || { echo "::error::Managed dir not found in YARG zip"; exit 1; }
+        test -f "$managed/Assembly-CSharp.dll" || { echo "::error::Assembly-CSharp.dll missing"; exit 1; }
+        mkdir -p yarg-managed
+        cp "$managed"/*.dll yarg-managed/
+        rm -rf yarg.zip yarg-unzip
+
+    - name: Build mod
+      id: build
+      shell: bash
+      run: |
+        set -euo pipefail
+        managed="$(pwd)/yarg-managed"
+        dotnet build mod/BardQuest.Mod/BardQuest.Mod.csproj \
+          -c "${{ inputs.configuration }}" \
+          -p:YargManaged="$managed" \
+          -p:ModVersion="${{ inputs.mod-version }}"
+        dir="$(pwd)/mod/BardQuest.Mod/bin/${{ inputs.configuration }}"
+        for n in BardQuest.Mod.dll BardQuest.Domain.dll YARG.Core.dll; do
+          test -f "$dir/$n" || { echo "::error::missing $n in $dir"; exit 1; }
+        done
+        echo "dll-dir=$dir" >> "$GITHUB_OUTPUT"
