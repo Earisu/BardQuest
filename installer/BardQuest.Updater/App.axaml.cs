@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using Avalonia.Platform;
+using Avalonia.Threading;
 
 namespace BardQuest.Updater;
 
@@ -10,6 +11,7 @@ public partial class App : Application
 {
     private TrayIcon? _tray;
     private MainWindow? _window;
+    private BackgroundUpdateService? _background;
 
     public override void Initialize() => AvaloniaXamlLoader.Load(this);
 
@@ -21,6 +23,15 @@ public partial class App : Application
             {
                 desktop.ShutdownMode = ShutdownMode.OnExplicitShutdown;
                 _tray = BuildTrayIcon(desktop);
+
+                desktop.ShutdownRequested += (_, _) => _background?.Stop();
+                _background = new BackgroundUpdateService(
+                    UpdaterConfig.DefaultPath(),
+                    text => Dispatcher.UIThread.Post(() =>
+                    {
+                        _tray?.ToolTipText = text;
+                    }));
+                _background.Start();
             }
             else
             {
@@ -44,10 +55,12 @@ public partial class App : Application
 
         var open = new NativeMenuItem("Open BardQuest Updater");
         open.Click += (_, _) => ShowWindow();
+        var check = new NativeMenuItem("Check for updates now");
+        check.Click += async (_, _) => { if (_background is not null) { await _background.CheckNowAsync(); } };
         var quit = new NativeMenuItem("Quit");
         quit.Click += (_, _) => desktop.Shutdown();
 
-        tray.Menu = [open, new NativeMenuItemSeparator(), quit];
+        tray.Menu = [open, check, new NativeMenuItemSeparator(), quit];
         tray.Clicked += (_, _) => ShowWindow();
         return tray;
     }

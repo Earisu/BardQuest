@@ -345,8 +345,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
     }
 
     // True if a YARG process is currently running (patching while it runs would fail/corrupt).
-    private static bool IsYargRunning() =>
-        System.Diagnostics.Process.GetProcessesByName("YARG").Length > 0;
+    private static bool IsYargRunning() => YargProcess.IsRunning();
 
     private void RunAction(string runningStatus, Action<string> action)
     {
