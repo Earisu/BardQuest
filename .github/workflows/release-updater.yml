@@ -85,8 +85,14 @@ jobs:
         with:
           path: dist
       - name: Publish release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: dist/**/BardQuest-Updater-*.zip
-          generate_release_notes: true
-          fail_on_unmatched_files: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          shopt -s globstar nullglob
+          files=(dist/**/BardQuest-Updater-*.zip)
+          test "${#files[@]}" -gt 0 || { echo "::error::no updater artifacts found"; exit 1; }
+          gh release create "${GITHUB_REF_NAME}" "${files[@]}" \
+            --title "BardQuest Updater ${GITHUB_REF_NAME#updater-v}" \
+            --generate-notes

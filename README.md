@@ -17,7 +17,8 @@ pushing tags — the mod and the updater are versioned and released independentl
 - **Mod** — push a `mod-v*` tag (e.g. `mod-v1.2.0`). Builds the mod against the pinned
   YARG and publishes a Release with `bardquest-mod-<version>.zip` (the three mod DLLs).
 - **Updater** — push an `updater-v*` tag (e.g. `updater-v0.3.0`). Publishes self-contained
-  builds for Windows (`.exe`), Linux (bare binary), and macOS (a `.app` bundle) as zips.
+  builds for Windows, Linux, and macOS (wrapped in a `.app` bundle) as zips — each zip holds
+  the full self-contained app (runnable with no .NET install).
 
 ### Which YARG the mod targets
 

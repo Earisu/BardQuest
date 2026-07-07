@@ -176,7 +176,9 @@ public sealed class MainViewModel : INotifyPropertyChanged
             }
 
             CandidateDisplay = rel.Tag;
-            if (SeamPatcher.IsManagedDirPatched(managed) && IsYargRunning())
+            // Install always writes DLLs into the Managed dir and patches the seam, so a
+            // running YARG blocks it even on a first (unpatched) install — not just re-installs.
+            if (IsYargRunning())
             {
                 Status = "Close YARG before installing, then click Install again.";
                 return;
