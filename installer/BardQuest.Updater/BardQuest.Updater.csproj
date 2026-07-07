@@ -12,6 +12,11 @@
     <PackageReference Include="Avalonia.Themes.Fluent" Version="11.3.18" />
   </ItemGroup>
   <ItemGroup>
+    <!-- Single source of truth: the repo-root brand logo, embedded as an Avalonia
+         resource at avares:/Assets/BardQuest-logo.png (no duplicate copy in-project). -->
+    <AvaloniaResource Include="../../img/BardQuest-logo.png" Link="Assets/BardQuest-logo.png" />
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="../BardQuest.Updater.Core/BardQuest.Updater.Core.csproj" />
   </ItemGroup>
 </Project>
