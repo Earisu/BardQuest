@@ -4,6 +4,10 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <TargetFramework Condition="'$(TargetFramework)'=='' and '$(TargetFrameworks)'==''">net10.0</TargetFramework>
     <LangVersion>latest</LangVersion>
-    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <!-- Warnings are fatal only in CI (GitHub sets CI=true). Local builds stay lenient.
+         Note: this promotes C# (Roslyn) warnings only; the pre-existing MSB3277 assembly-
+         version-conflict warnings from referencing the YARG game assemblies are MSBuild
+         warnings and remain warnings. lib/YARG.Core has its own Directory.Build.props. -->
+    <TreatWarningsAsErrors Condition="'$(CI)' == 'true'">true</TreatWarningsAsErrors>
   </PropertyGroup>
 </Project>

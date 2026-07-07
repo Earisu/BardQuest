@@ -1,0 +1,103 @@
+name: Release updater
+
+# Push an updater-v* tag (e.g. updater-v0.3.0) to build self-contained updater
+# apps for Windows, Linux, and macOS and publish a GitHub Release with all three.
+# workflow_dispatch builds the artifacts without publishing (dry run).
+on:
+  push:
+    tags: ['updater-v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version without the leading v (e.g. 0.3.0)'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - rid: win-x64
+            os: windows-latest
+          - rid: linux-x64
+            os: ubuntu-latest
+          - rid: osx-arm64
+            os: macos-14
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Resolve version
+        id: v
+        shell: bash
+        run: |
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            echo "version=${{ github.event.inputs.version }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=${GITHUB_REF_NAME#updater-v}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Publish (self-contained)
+        shell: bash
+        run: |
+          dotnet publish installer/BardQuest.Updater -c Release -r ${{ matrix.rid }} \
+            --self-contained true -p:Version=${{ steps.v.outputs.version }} \
+            -p:DebugType=none -o publish/${{ matrix.rid }}
+
+      - name: Package macOS .app
+        if: matrix.rid == 'osx-arm64'
+        run: |
+          bash installer/mac/make-app.sh publish/osx-arm64 "${{ steps.v.outputs.version }}" dist
+          # ditto (not zip) preserves the bundle's code signature and metadata — a
+          # plain zip round-trip can invalidate the ad-hoc signature and re-trigger
+          # the "damaged" Gatekeeper error on the downloaded app.
+          ditto -c -k --sequesterRsrc --keepParent \
+            "dist/BardQuest Updater.app" \
+            "$GITHUB_WORKSPACE/BardQuest-Updater-${{ steps.v.outputs.version }}-osx-arm64.zip"
+
+      - name: Package Linux
+        if: matrix.rid == 'linux-x64'
+        run: |
+          (cd publish/linux-x64 && zip -qr "$GITHUB_WORKSPACE/BardQuest-Updater-${{ steps.v.outputs.version }}-linux-x64.zip" .)
+
+      - name: Package Windows
+        if: matrix.rid == 'win-x64'
+        shell: pwsh
+        run: |
+          Compress-Archive -Path publish/win-x64/* -DestinationPath "BardQuest-Updater-${{ steps.v.outputs.version }}-win-x64.zip"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: updater-${{ matrix.rid }}
+          path: BardQuest-Updater-*.zip
+          if-no-files-found: error
+
+  release:
+    name: Publish GitHub Release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          shopt -s globstar nullglob
+          files=(dist/**/BardQuest-Updater-*.zip)
+          test "${#files[@]}" -gt 0 || { echo "::error::no updater artifacts found"; exit 1; }
+          gh release create "${GITHUB_REF_NAME}" "${files[@]}" \
+            --title "BardQuest Updater ${GITHUB_REF_NAME#updater-v}" \
+            --generate-notes

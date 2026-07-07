@@ -36,7 +36,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
             OnPropertyChanged();
             OnPropertyChanged(nameof(ManagedDir));
             OnPropertyChanged(nameof(HasManagedDir));
-            RefreshCompat();
+            RefreshInstalledDisplay();
         }
     }
 
@@ -78,7 +78,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(SelectedInstall));
         OnPropertyChanged(nameof(ManagedDir));
         OnPropertyChanged(nameof(HasManagedDir));
-        RefreshCompat();
+        RefreshInstalledDisplay();
     }
 
     // Sets a manually-picked Managed folder (from the folder picker) after validation.
@@ -97,23 +97,18 @@ public sealed class MainViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(ManagedDir));
         OnPropertyChanged(nameof(HasManagedDir));
         OnPropertyChanged(nameof(SelectedInstall));
-        RefreshCompat();
+        RefreshInstalledDisplay();
         return true;
     }
 
     public bool Busy
     {
         get;
-        set { field = value; OnPropertyChanged(); OnPropertyChanged(nameof(CanAct)); OnPropertyChanged(nameof(CanInstall)); }
+        set { field = value; OnPropertyChanged(); OnPropertyChanged(nameof(CanAct)); }
     }
 
     // Remove / Check are allowed whenever a valid Managed dir is selected and we're idle.
     public bool CanAct => HasManagedDir && !Busy;
-
-    // Install / Update are additionally gated by version compatibility (hard block on a known mismatch).
-    public bool CanInstall => CanAct && _compat != Compatibility.Incompatible;
-
-    private Compatibility _compat = Compatibility.Unverified;
 
     public string InstalledDisplay
     {
@@ -125,29 +120,15 @@ public sealed class MainViewModel : INotifyPropertyChanged
     {
         get;
         private set { field = value; OnPropertyChanged(); }
-    } = "";
-
-    public string CompatMessage
-    {
-        get;
-        private set { field = value; OnPropertyChanged(); OnPropertyChanged(nameof(HasCompatWarning)); }
-    } = "";
-
-    public bool HasCompatWarning => CompatMessage.Length > 0;
-
-    // The folder holding the built mod DLLs, shipped next to the updater in a release.
-    private static string ModDllSourceDir() => Path.Combine(AppContext.BaseDirectory, "mod");
-
-    private static ModAssemblyInfo CandidateInfo() =>
-        ModAssemblyReader.Read(Path.Combine(ModDllSourceDir(), "BardQuest.Mod.dll"));
+    } = "(unknown — click Check for updates)";
 
     private string? CurrentInstallTag() =>
         SelectedInstall?.Label
         ?? (HasManagedDir ? YargLocator.TagFromManagedDir(_config.ManagedDir!) : null);
 
-    // Recomputes the installed/candidate version display and the compatibility gate.
-    // Call whenever the selected Managed dir/install changes, or after an action.
-    public void RefreshCompat()
+    // Recomputes the installed-version display from the deployed mod DLL's baked markers.
+    // Purely local (no network); safe to call from selection-change notify sites.
+    public void RefreshInstalledDisplay()
     {
         ModAssemblyInfo installed = HasManagedDir
             ? ModAssemblyReader.Read(Path.Combine(_config.ManagedDir!, "BardQuest.Mod.dll"))
@@ -155,20 +136,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
         InstalledDisplay = installed.ModVersion is { } iv
             ? iv + (installed.YargTarget is { } it ? $" (for YARG {it})" : "")
             : "(not installed)";
-
-        ModAssemblyInfo candidate = CandidateInfo();
-        CandidateDisplay = candidate.ModVersion is { } cv
-            ? cv + (candidate.YargTarget is { } ct ? $" for YARG {ct}" : "")
-            : "";
-
-        string? installTag = CurrentInstallTag();
-        _compat = YargCompat.Evaluate(candidate.YargTarget, installTag);
-        CompatMessage = _compat == Compatibility.Incompatible
-            ? $"⚠ This build targets YARG {candidate.YargTarget}; selected install is {installTag}."
-            : "";
-
         OnPropertyChanged(nameof(CanAct));
-        OnPropertyChanged(nameof(CanInstall));
     }
 
     // Copy the mod DLLs from sourceDir into managed, ensure the seam is patched
@@ -187,19 +155,99 @@ public sealed class MainViewModel : INotifyPropertyChanged
         _config.Save(_configPath);
     }
 
-    public void Install()
+    public async Task InstallAsync()
     {
-        if (!CanInstall)
+        if (!CanAct)
         {
             return;
         }
 
-        RunAction("Installing…", managed =>
+        Busy = true;
+        Status = "Fetching latest mod release…";
+        string? temp = null;
+        try
         {
-            string version = CandidateInfo().ModVersion ?? "0.0.0-dev";
-            ApplyModDlls(ModDllSourceDir(), version, managed);
-            Status = $"Installed {version}.";
-        });
+            string managed = _config.ManagedDir!;
+            ReleaseInfo? latest = await FetchLatestModAsync();
+            if (latest is not { } rel)
+            {
+                Status = "No mod release found on GitHub.";
+                return;
+            }
+
+            CandidateDisplay = rel.Tag;
+            // Install always writes DLLs into the Managed dir and patches the seam, so a
+            // running YARG blocks it even on a first (unpatched) install — not just re-installs.
+            if (IsYargRunning())
+            {
+                Status = "Close YARG before installing, then click Install again.";
+                return;
+            }
+
+            temp = NewTempDir("bq-install-");
+            string? version = await DownloadGateApplyAsync(rel, managed, temp, "Install");
+            if (version is not null)
+            {
+                Status = $"Installed {version}.";
+            }
+        }
+        catch (Exception ex)
+        {
+            Status = "Install failed: " + ex.Message;
+        }
+        finally
+        {
+            CleanupTemp(temp);
+            Busy = false;
+            RefreshInstalledDisplay();
+        }
+    }
+
+    // Download rel into temp, validate the mod DLLs, gate the downloaded build's YARG
+    // target against the selected install, and apply. Returns the applied version, or
+    // null if it aborted (Status is already set to the reason). Temp is cleaned by the caller.
+    private async Task<string?> DownloadGateApplyAsync(ReleaseInfo rel, string managed, string temp, string abortVerb)
+    {
+        Status = $"Downloading mod {rel.Tag}…";
+        _ = await Download(rel.AssetUrl, temp);
+
+        string? extracted = ReleaseDownloader.ValidateExtracted(temp);
+        if (extracted is null)
+        {
+            Status = "Downloaded release did not contain the expected mod files.";
+            return null;
+        }
+
+        ModAssemblyInfo downloaded = ModAssemblyReader.Read(Path.Combine(extracted, "BardQuest.Mod.dll"));
+        string? installTag = CurrentInstallTag();
+        if (YargCompat.Evaluate(downloaded.YargTarget, installTag) == Compatibility.Incompatible)
+        {
+            Status = $"⚠ This mod targets YARG {downloaded.YargTarget}; selected install is {installTag}. {abortVerb} aborted.";
+            return null;
+        }
+
+        string version = downloaded.ModVersion ?? rel.Tag;
+        ApplyModDlls(extracted, version, managed);
+        return version;
+    }
+
+    private static async Task<ReleaseInfo?> FetchLatestModAsync()
+    {
+        using var http = new HttpClient();
+        http.DefaultRequestHeaders.UserAgent.ParseAdd("BardQuest-Updater");
+        return await ReleaseClient.FetchLatestReleaseAsync(
+            http, ReleaseClient.DefaultOwner, ReleaseClient.DefaultRepo, ReleaseClient.ModTagPrefix);
+    }
+
+    private static string NewTempDir(string prefix) =>
+        Path.Combine(Path.GetTempPath(), prefix + Guid.NewGuid());
+
+    private static void CleanupTemp(string? temp)
+    {
+        if (temp is not null && Directory.Exists(temp))
+        {
+            try { Directory.Delete(temp, recursive: true); } catch (IOException) { /* best-effort cleanup */ }
+        }
     }
 
     public void Remove()
@@ -227,7 +275,8 @@ public sealed class MainViewModel : INotifyPropertyChanged
         {
             string managed = _config.ManagedDir!;
             bool seamPresent = SeamPatcher.IsManagedDirPatched(managed);
-            ReleaseInfo? latest = await FetchLatestAsync();
+            ReleaseInfo? latest = await FetchLatestModAsync();
+            CandidateDisplay = latest?.Tag ?? "(none published)";
             UpdateStatus status = UpdateEvaluator.Evaluate(_config, latest, seamPresent);
 
             if (status.SeamMissing)
@@ -251,19 +300,12 @@ public sealed class MainViewModel : INotifyPropertyChanged
         {
             Status = "Update check failed: " + ex.Message;
         }
-        finally { Busy = false; RefreshCompat(); }
-    }
-
-    private static async Task<ReleaseInfo?> FetchLatestAsync()
-    {
-        using var http = new HttpClient();
-        http.DefaultRequestHeaders.UserAgent.ParseAdd("BardQuest-Updater");
-        return await ReleaseClient.FetchLatestReleaseAsync(http, ReleaseClient.DefaultOwner, ReleaseClient.DefaultRepo);
+        finally { Busy = false; RefreshInstalledDisplay(); }
     }
 
     public async Task UpdateAsync()
     {
-        if (!CanInstall)
+        if (!CanAct)
         {
             return;
         }
@@ -274,10 +316,15 @@ public sealed class MainViewModel : INotifyPropertyChanged
         try
         {
             string managed = _config.ManagedDir!;
-            ReleaseInfo? latest = await FetchLatestAsync();
+            ReleaseInfo? latest = await FetchLatestModAsync();
+            if (latest is not { } rel)
+            {
+                Status = "No mod release found on GitHub.";
+                return;
+            }
 
-            bool newer = latest is { } rel
-                && _config.InstalledVersion is { } installed
+            CandidateDisplay = rel.Tag;
+            bool newer = _config.InstalledVersion is { } installed
                 && SemVer.TryParse(rel.Tag, out _) && SemVer.TryParse(installed, out _)
                 && SemVer.IsNewer(rel.Tag, installed);
 
@@ -293,30 +340,12 @@ public sealed class MainViewModel : INotifyPropertyChanged
                 return;
             }
 
-            Status = $"Downloading {latest!.Value.Tag}…";
-            temp = Path.Combine(Path.GetTempPath(), "bq-update-" + Guid.NewGuid());
-            _ = await Download(latest.Value.AssetUrl, temp);
-
-            string? extracted = ReleaseDownloader.ValidateExtracted(temp);
-            if (extracted is null)
+            temp = NewTempDir("bq-update-");
+            string? version = await DownloadGateApplyAsync(rel, managed, temp, "Update");
+            if (version is not null)
             {
-                Status = "Downloaded release did not contain the expected mod files.";
-                return;
+                Status = $"Updated to {version}.";
             }
-
-            // Gate the DOWNLOADED build (not just the bundled candidate): a newer release may
-            // have been re-cut against a different YARG version than the current install targets.
-            ModAssemblyInfo downloaded = ModAssemblyReader.Read(Path.Combine(extracted, "BardQuest.Mod.dll"));
-            string? installTag = CurrentInstallTag();
-            if (YargCompat.Evaluate(downloaded.YargTarget, installTag) == Compatibility.Incompatible)
-            {
-                Status = $"⚠ Downloaded build targets YARG {downloaded.YargTarget}; selected install is {installTag}. Update aborted.";
-                return;
-            }
-
-            string version = downloaded.ModVersion ?? latest.Value.Tag;
-            ApplyModDlls(extracted, version, managed);
-            Status = $"Updated to {version}.";
         }
         catch (Exception ex)
         {
@@ -324,13 +353,9 @@ public sealed class MainViewModel : INotifyPropertyChanged
         }
         finally
         {
-            if (temp is not null && Directory.Exists(temp))
-            {
-                try { Directory.Delete(temp, recursive: true); } catch (IOException) { /* best-effort cleanup */ }
-            }
-
+            CleanupTemp(temp);
             Busy = false;
-            RefreshCompat();
+            RefreshInstalledDisplay();
         }
     }
 
@@ -362,7 +387,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
         {
             Status = "Failed: " + ex.Message;
         }
-        finally { Busy = false; RefreshCompat(); }
+        finally { Busy = false; RefreshInstalledDisplay(); }
     }
 
     private YargInstall? FindByManagedDir(string managedDir)

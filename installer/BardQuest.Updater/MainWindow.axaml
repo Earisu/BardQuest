@@ -3,12 +3,18 @@
         xmlns:vm="using:BardQuest.Updater"
         x:Class="BardQuest.Updater.MainWindow"
         x:DataType="vm:MainViewModel"
-        Width="560" Height="520"
+        Width="560" Height="540"
         Title="BardQuest Updater"
+        Icon="/Assets/BardQuest-logo.png"
         CanResize="False"
         WindowStartupLocation="CenterScreen">
   <StackPanel Margin="24" Spacing="14">
-    <TextBlock Text="BardQuest" FontSize="28" FontWeight="Bold" />
+    <StackPanel Orientation="Horizontal" Spacing="12">
+      <Image Source="/Assets/BardQuest-logo.png" Width="52" Height="52"
+             VerticalAlignment="Center" />
+      <TextBlock Text="BardQuest" FontSize="28" FontWeight="Bold"
+                 VerticalAlignment="Center" />
+    </StackPanel>
 
     <TextBlock Text="YARG installation" FontWeight="SemiBold" />
     <ComboBox ItemsSource="{Binding Installs}"
@@ -39,14 +45,11 @@
     <Border Height="1" Background="#30FFFFFF" Margin="0,4" />
 
     <StackPanel Orientation="Horizontal" Spacing="8">
-      <Button Content="Install" Click="OnInstall" IsEnabled="{Binding CanInstall}" />
-      <Button Content="Update" Click="OnUpdate" IsEnabled="{Binding CanInstall}" />
+      <Button Content="Install" Click="OnInstall" IsEnabled="{Binding CanAct}" />
+      <Button Content="Update" Click="OnUpdate" IsEnabled="{Binding CanAct}" />
       <Button Content="Check for updates" Click="OnCheck" IsEnabled="{Binding CanAct}" />
       <Button Content="Remove" Click="OnRemove" IsEnabled="{Binding CanAct}" />
     </StackPanel>
-
-    <TextBlock Text="{Binding CompatMessage}" Foreground="#F0B429" TextWrapping="Wrap"
-               IsVisible="{Binding HasCompatWarning}" />
 
     <StackPanel Spacing="2">
       <StackPanel Orientation="Horizontal" Spacing="4">
@@ -54,7 +57,7 @@
         <TextBlock Text="{Binding InstalledDisplay}" Opacity="0.7" FontSize="12" />
       </StackPanel>
       <StackPanel Orientation="Horizontal" Spacing="4">
-        <TextBlock Text="This build:" Opacity="0.7" FontSize="12" />
+        <TextBlock Text="Latest available:" Opacity="0.7" FontSize="12" />
         <TextBlock Text="{Binding CandidateDisplay}" Opacity="0.7" FontSize="12" />
       </StackPanel>
     </StackPanel>

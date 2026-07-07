@@ -9,8 +9,13 @@ public static class ReleaseClient
 {
     public const string DefaultOwner = "Earisu";
     public const string DefaultRepo = "BardQuest";
+    public const string ModTagPrefix = "mod-v";
 
-    public static ReleaseInfo? ParseLatestRelease(string releasesJson)
+    // Returns the newest non-draft, non-prerelease release with a .zip asset. When
+    // tagPrefix is non-empty, only releases whose tag_name starts with it are
+    // considered, and the returned Tag has the prefix stripped (a bare semver).
+    // Empty tagPrefix = no filter, raw tag_name (legacy behavior).
+    public static ReleaseInfo? ParseLatestRelease(string releasesJson, string tagPrefix = "")
     {
         using var doc = JsonDocument.Parse(releasesJson);
         if (doc.RootElement.ValueKind != JsonValueKind.Array)
@@ -31,24 +36,31 @@ public static class ReleaseClient
                 continue;
             }
 
+            string tag = tagEl.GetString()!;
+            if (tagPrefix.Length > 0 && !tag.StartsWith(tagPrefix, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
             string? assetUrl = FindZipAssetUrl(release);
             if (assetUrl is null)
             {
                 continue;
             }
 
-            return new ReleaseInfo(tagEl.GetString()!, assetUrl);
+            string version = tagPrefix.Length > 0 ? tag[tagPrefix.Length..] : tag;
+            return new ReleaseInfo(version, assetUrl);
         }
 
         return null;
     }
 
     public static async Task<ReleaseInfo?> FetchLatestReleaseAsync(
-        HttpClient http, string owner, string repo, CancellationToken ct = default)
+        HttpClient http, string owner, string repo, string tagPrefix = "", CancellationToken ct = default)
     {
         string url = $"https://api.github.com/repos/{owner}/{repo}/releases";
         string body = await http.GetStringAsync(url, ct);
-        return ParseLatestRelease(body);
+        return ParseLatestRelease(body, tagPrefix);
     }
 
     private static bool GetBool(JsonElement obj, string name) =>

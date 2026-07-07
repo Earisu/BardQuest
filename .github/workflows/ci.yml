@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Build & unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Unit tests (YARG-free, Avalonia-free)
+        run: dotnet test tests/BardQuest.Updater.Tests -c Release
+      - name: Build updater (compile check)
+        run: dotnet build installer/BardQuest.Updater -c Release
+
+  mod-build:
+    name: Mod compile gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Build mod against downloaded YARG
+        uses: ./.github/actions/build-mod

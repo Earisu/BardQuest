@@ -1,0 +1,49 @@
+name: Release mod
+
+# Push a mod-v* tag (e.g. mod-v1.2.0) to build the mod against the pinned YARG
+# (from Refs.props) and publish a GitHub Release with the DLL zip attached.
+on:
+  push:
+    tags: ['mod-v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release-mod:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Resolve mod version
+        id: v
+        run: echo "version=${GITHUB_REF_NAME#mod-v}" >> "$GITHUB_OUTPUT"
+
+      - name: Build mod
+        id: mod
+        uses: ./.github/actions/build-mod
+        with:
+          mod-version: ${{ steps.v.outputs.version }}
+
+      - name: Package zip
+        run: |
+          set -euo pipefail
+          stage="$(mktemp -d)"
+          for n in BardQuest.Mod.dll BardQuest.Domain.dll YARG.Core.dll; do
+            cp "${{ steps.mod.outputs.dll-dir }}/$n" "$stage/"
+          done
+          (cd "$stage" && zip -qr "$GITHUB_WORKSPACE/bardquest-mod-${{ steps.v.outputs.version }}.zip" .)
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" \
+            "bardquest-mod-${{ steps.v.outputs.version }}.zip" \
+            --title "BardQuest mod ${{ steps.v.outputs.version }}" \
+            --notes "Built for YARG ${{ steps.mod.outputs.yarg-version }}."

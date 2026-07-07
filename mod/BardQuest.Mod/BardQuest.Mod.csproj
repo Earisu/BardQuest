@@ -11,6 +11,6 @@
   </ItemGroup>
   <ItemGroup>
     <AssemblyMetadata Condition="'$(ModVersion)' != ''" Include="BardQuestModVersion" Value="$(ModVersion)" />
-    <AssemblyMetadata Condition="'$(YargTarget)' != ''" Include="BardQuestYargTarget" Value="$(YargTarget)" />
+    <AssemblyMetadata Include="BardQuestYargTarget" Value="$(YargTarget)" />
   </ItemGroup>
 </Project>
