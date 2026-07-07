@@ -11,6 +11,10 @@ public sealed class UpdaterConfig
     public bool AutoStartEnabled { get; set; }
     public DateTime? LastCheckUtc { get; set; }
 
+    // Newest release already downloaded + evaluated by the background updater, so a
+    // held (waiting-for-YARG) or incompatible release is not re-downloaded every poll.
+    public string? HeldVersion { get; set; }
+
     private static readonly JsonSerializerOptions s_options = new() { WriteIndented = true };
 
     public static string DefaultPath() =>

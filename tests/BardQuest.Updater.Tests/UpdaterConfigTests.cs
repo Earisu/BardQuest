@@ -54,4 +54,18 @@ public class UpdaterConfigTests
         }
         finally { Directory.Delete(dir, recursive: true); }
     }
+
+    [Fact]
+    public void RoundTrips_HeldVersion()
+    {
+        string path = Path.Combine(Path.GetTempPath(), "bq-cfg-" + Guid.NewGuid() + ".json");
+        try
+        {
+            new UpdaterConfig { HeldVersion = "v1.4.0", AutoStartEnabled = true }.Save(path);
+            var loaded = UpdaterConfig.Load(path);
+            Assert.Equal("v1.4.0", loaded.HeldVersion);
+            Assert.True(loaded.AutoStartEnabled);
+        }
+        finally { File.Delete(path); }
+    }
 }
