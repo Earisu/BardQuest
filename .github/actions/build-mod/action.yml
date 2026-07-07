@@ -44,7 +44,7 @@ runs:
         yarg="${{ steps.resolve.outputs.yarg-version }}"
         url="https://github.com/YARC-Official/YARG/releases/download/v${yarg}/YARG_v${yarg}-Linux-x86_64.zip"
         echo "Downloading $url"
-        curl -sSL -o yarg.zip "$url"
+        curl -fsSL -o yarg.zip "$url"
         mkdir -p yarg-unzip
         unzip -q yarg.zip -d yarg-unzip
         managed="$(find yarg-unzip -type d -name Managed -path '*_Data/Managed' | head -1)"
