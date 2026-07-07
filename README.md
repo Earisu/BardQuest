@@ -32,3 +32,19 @@ edit the line, and push a `mod-v*` tag.
 
 The macOS updater is unsigned, so the first launch is blocked by Gatekeeper. Right-click
 `BardQuest Updater.app` → **Open** → **Open** to run it (only needed once).
+
+### Automatic updates (Windows & macOS)
+
+After the first install, BardQuest keeps itself up to date in the background.
+The updater registers a small login item that runs quietly in the system tray
+(Windows) / menu bar (macOS). When a new mod release is published, it downloads
+and applies the update automatically the next time it is safe — that is, when
+YARG is closed and the release matches your installed YARG version. If an
+update needs your attention (for example, it targets a different YARG version),
+the tray flags it and clicking it opens the updater.
+
+This is controlled by a single checkbox in the updater — **"Keep BardQuest up
+to date automatically"** — which is on by default after your first install.
+Uncheck it to remove the login item and stop background updates; you can still
+update manually from the updater window at any time. (Linux has no background
+tray; use the updater window to update.)

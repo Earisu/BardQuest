@@ -12,6 +12,7 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         DataContext = _vm;
+        Opened += async (_, _) => await _vm.CheckOnLaunchAsync();
     }
 
     private void OnRescan(object? sender, RoutedEventArgs e) => _vm.RefreshInstalls();

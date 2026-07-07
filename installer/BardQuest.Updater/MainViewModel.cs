@@ -9,6 +9,9 @@ public sealed class MainViewModel : INotifyPropertyChanged
     private readonly string _configPath;
     private readonly UpdaterConfig _config;
 
+    private IAutoStartManager AutoStart =>
+        field ??= AutoStartManager.ForCurrentOs(Environment.ProcessPath ?? "");
+
     public MainViewModel() : this(UpdaterConfig.DefaultPath()) { }
 
     public MainViewModel(string configPath)
@@ -110,6 +113,33 @@ public sealed class MainViewModel : INotifyPropertyChanged
     // Remove / Check are allowed whenever a valid Managed dir is selected and we're idle.
     public bool CanAct => HasManagedDir && !Busy;
 
+    // Single opt-out setting: registers/removes the login item that runs the background
+    // tray updater, and gates whether it auto-applies. Persisted in AutoStartEnabled.
+    public bool AutoUpdateEnabled
+    {
+        get => _config.AutoStartEnabled;
+        set
+        {
+            if (_config.AutoStartEnabled == value)
+            {
+                return;
+            }
+
+            _config.AutoStartEnabled = value;
+            _config.Save(_configPath);
+            try
+            {
+                if (value) { AutoStart.Enable(); } else { AutoStart.Disable(); }
+            }
+            catch (Exception ex)
+            {
+                Status = "Could not change the login item: " + ex.Message;
+            }
+
+            OnPropertyChanged();
+        }
+    }
+
     public string InstalledDisplay
     {
         get;
@@ -137,22 +167,6 @@ public sealed class MainViewModel : INotifyPropertyChanged
             ? iv + (installed.YargTarget is { } it ? $" (for YARG {it})" : "")
             : "(not installed)";
         OnPropertyChanged(nameof(CanAct));
-    }
-
-    // Copy the mod DLLs from sourceDir into managed, ensure the seam is patched
-    // (launcher-clobber-safe), and record the installed version. Shared by Install and Update.
-    private void ApplyModDlls(string sourceDir, string version, string managed)
-    {
-        if (!File.Exists(Path.Combine(sourceDir, "BardQuest.Mod.dll")))
-        {
-            throw new FileNotFoundException($"Mod DLLs not found (expected in '{sourceDir}').");
-        }
-
-        ModDeployer.Copy(sourceDir, managed);
-        SeamPatcher.EnsurePatched(managed);
-        _config.InstalledVersion = version;
-        _config.LastCheckUtc = DateTime.UtcNow;
-        _config.Save(_configPath);
     }
 
     public async Task InstallAsync()
@@ -188,6 +202,11 @@ public sealed class MainViewModel : INotifyPropertyChanged
             string? version = await DownloadGateApplyAsync(rel, managed, temp, "Install");
             if (version is not null)
             {
+                if (!_config.AutoStartEnabled)
+                {
+                    AutoUpdateEnabled = true; // default ON on first install; registers the login item
+                }
+
                 Status = $"Installed {version}.";
             }
         }
@@ -203,32 +222,33 @@ public sealed class MainViewModel : INotifyPropertyChanged
         }
     }
 
-    // Download rel into temp, validate the mod DLLs, gate the downloaded build's YARG
-    // target against the selected install, and apply. Returns the applied version, or
-    // null if it aborted (Status is already set to the reason). Temp is cleaned by the caller.
+    // Download rel into temp, gate the downloaded build's YARG target against the selected
+    // install, and apply. Returns the applied version, or null if it aborted (Status set to
+    // the reason). Temp is cleaned by the caller.
     private async Task<string?> DownloadGateApplyAsync(ReleaseInfo rel, string managed, string temp, string abortVerb)
     {
         Status = $"Downloading mod {rel.Tag}…";
-        _ = await Download(rel.AssetUrl, temp);
-
-        string? extracted = ReleaseDownloader.ValidateExtracted(temp);
-        if (extracted is null)
-        {
-            Status = "Downloaded release did not contain the expected mod files.";
-            return null;
-        }
-
-        ModAssemblyInfo downloaded = ModAssemblyReader.Read(Path.Combine(extracted, "BardQuest.Mod.dll"));
+        using var http = new HttpClient();
+        http.DefaultRequestHeaders.UserAgent.ParseAdd("BardQuest-Updater");
         string? installTag = CurrentInstallTag();
-        if (YargCompat.Evaluate(downloaded.YargTarget, installTag) == Compatibility.Incompatible)
-        {
-            Status = $"⚠ This mod targets YARG {downloaded.YargTarget}; selected install is {installTag}. {abortVerb} aborted.";
-            return null;
-        }
 
-        string version = downloaded.ModVersion ?? rel.Tag;
-        ApplyModDlls(extracted, version, managed);
-        return version;
+        ApplyResult result = await ModUpdateApplier.DownloadGateApplyAsync(http, rel, temp, installTag, managed);
+        switch (result.Outcome)
+        {
+            case ApplyOutcome.MissingFiles:
+                Status = "Downloaded release did not contain the expected mod files.";
+                return null;
+            case ApplyOutcome.Incompatible:
+                Status = $"⚠ This mod targets YARG {result.ModTarget}; selected install is {installTag}. {abortVerb} aborted.";
+                return null;
+            case ApplyOutcome.Applied:
+            default:
+                string version = result.Version ?? rel.Tag;
+                _config.InstalledVersion = version;
+                _config.LastCheckUtc = DateTime.UtcNow;
+                _config.Save(_configPath);
+                return version;
+        }
     }
 
     private static async Task<ReleaseInfo?> FetchLatestModAsync()
@@ -260,6 +280,53 @@ public sealed class MainViewModel : INotifyPropertyChanged
             _config.Save(_configPath);
             Status = "Removed BardQuest.";
         });
+    }
+
+    // Passive check run when the window opens: fetch the latest published release and show
+    // what's available. Unlike the "Check for updates" button it never mutates the install
+    // (no seam re-apply) and works even before a YARG install is selected.
+    public async Task CheckOnLaunchAsync()
+    {
+        if (Busy)
+        {
+            return;
+        }
+
+        Busy = true;
+        Status = "Checking for the latest BardQuest…";
+        try
+        {
+            ReleaseInfo? latest = await FetchLatestModAsync();
+            CandidateDisplay = latest?.Tag ?? "(none published)";
+            if (latest is { } rel)
+            {
+                if (HasManagedDir)
+                {
+                    bool seamPresent = SeamPatcher.IsManagedDirPatched(_config.ManagedDir!);
+                    UpdateStatus status = UpdateEvaluator.Evaluate(_config, latest, seamPresent);
+                    Status = status.ModUpdateAvailable
+                        ? $"Update available: {status.AvailableVersion}. Close YARG, then click Update."
+                        : status.Installed ? "BardQuest is up to date."
+                        : $"BardQuest {rel.Tag} is available — click Install.";
+                }
+                else
+                {
+                    Status = $"BardQuest {rel.Tag} is available — select your YARG install, then click Install.";
+                }
+            }
+            else
+            {
+                Status = "No BardQuest release found on GitHub yet.";
+            }
+
+            _config.LastCheckUtc = DateTime.UtcNow;
+            _config.Save(_configPath);
+        }
+        catch (Exception ex)
+        {
+            Status = "Update check failed: " + ex.Message;
+        }
+        finally { Busy = false; RefreshInstalledDisplay(); }
     }
 
     public async Task CheckForUpdatesAsync()
@@ -359,16 +426,8 @@ public sealed class MainViewModel : INotifyPropertyChanged
         }
     }
 
-    private static async Task<string> Download(string assetUrl, string destDir)
-    {
-        using var http = new HttpClient();
-        http.DefaultRequestHeaders.UserAgent.ParseAdd("BardQuest-Updater");
-        return await ReleaseDownloader.DownloadAndExtractAsync(http, assetUrl, destDir);
-    }
-
     // True if a YARG process is currently running (patching while it runs would fail/corrupt).
-    private static bool IsYargRunning() =>
-        System.Diagnostics.Process.GetProcessesByName("YARG").Length > 0;
+    private static bool IsYargRunning() => YargProcess.IsRunning();
 
     private void RunAction(string runningStatus, Action<string> action)
     {

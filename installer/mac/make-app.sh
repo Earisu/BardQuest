@@ -52,6 +52,8 @@ ${ICON_PLIST}
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>LSMinimumSystemVersion</key><string>11.0</string>
   <key>NSHighResolutionCapable</key><true/>
+  <!-- Menu-bar-only app: no Dock icon. The updater lives in the tray/menu bar. -->
+  <key>LSUIElement</key><true/>
 </dict>
 </plist>
 PLIST

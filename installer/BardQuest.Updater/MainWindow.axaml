@@ -3,7 +3,7 @@
         xmlns:vm="using:BardQuest.Updater"
         x:Class="BardQuest.Updater.MainWindow"
         x:DataType="vm:MainViewModel"
-        Width="560" Height="540"
+        Width="560" Height="575"
         Title="BardQuest Updater"
         Icon="/Assets/BardQuest-logo.png"
         CanResize="False"
@@ -61,5 +61,8 @@
         <TextBlock Text="{Binding CandidateDisplay}" Opacity="0.7" FontSize="12" />
       </StackPanel>
     </StackPanel>
+
+    <CheckBox Content="Keep BardQuest up to date automatically (runs at login)"
+              IsChecked="{Binding AutoUpdateEnabled, Mode=TwoWay}" />
   </StackPanel>
 </Window>
