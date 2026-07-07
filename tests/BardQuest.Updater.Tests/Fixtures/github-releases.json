@@ -1,19 +1,27 @@
 [
   {
-    "tag_name": "v1.1.0",
+    "tag_name": "updater-v0.3.0",
     "draft": false,
-    "prerelease": true,
+    "prerelease": false,
     "assets": [
-      { "name": "BardQuest-v1.1.0.zip", "browser_download_url": "https://example.test/pre.zip" }
+      { "name": "BardQuest-Updater-0.3.0-linux-x64.zip", "browser_download_url": "https://example.test/updater.zip" }
     ]
   },
   {
-    "tag_name": "v1.0.0",
+    "tag_name": "mod-v1.1.0",
+    "draft": false,
+    "prerelease": true,
+    "assets": [
+      { "name": "bardquest-mod-1.1.0.zip", "browser_download_url": "https://example.test/pre.zip" }
+    ]
+  },
+  {
+    "tag_name": "mod-v1.0.0",
     "draft": false,
     "prerelease": false,
     "assets": [
       { "name": "notes.txt", "browser_download_url": "https://example.test/notes.txt" },
-      { "name": "BardQuest-v1.0.0.zip", "browser_download_url": "https://example.test/BardQuest-v1.0.0.zip" }
+      { "name": "bardquest-mod-1.0.0.zip", "browser_download_url": "https://example.test/bardquest-mod-1.0.0.zip" }
     ]
   }
 ]
