@@ -135,4 +135,48 @@ public class SeamPatcherScanTests
         }
         finally { Directory.Delete(managed, recursive: true); }
     }
+
+    // Simulate an OLDER BardQuest marker present but its pristine backup missing (e.g. deleted
+    // out-of-band by antivirus/manual cleanup) while the already-seamed live DLL survives.
+    // EnsurePatched must refuse to patch on top of the already-seamed live (which would double-inject
+    // the bootstrap seam) and must throw instead.
+    [Fact]
+    public void EnsurePatched_MarkerPresentButBackupMissing_Throws()
+    {
+        string managed = Path.Combine(Path.GetTempPath(), "bq-nobak-" + Guid.NewGuid());
+        try
+        {
+            WriteAssembly(managed);
+            string live = Path.Combine(managed, "Assembly-CSharp.dll");
+            string backup = live + ".bardquest-bak";
+            File.Copy(live, backup); // pristine backup, as a real v1 install would have left
+
+            // Hand-craft a "v1" live: one bootstrap call injected + a v1 marker type.
+            using (var m = ModuleDefinition.ReadModule(live, new ReaderParameters { ReadWrite = true }))
+            {
+                MethodDefinition onEnable =
+                    m.GetType("YARG.Menu.Main.MainMenu").Methods.Single(x => x.Name == "OnEnable");
+                MethodDefinition onMenu =
+                    m.GetType("BardQuest.Bootstrap").Methods.Single(x => x.Name == "OnMainMenuEnabled");
+                ILProcessor il = onEnable.Body.GetILProcessor();
+                Instruction firstInstr = onEnable.Body.Instructions[0];
+                il.InsertBefore(firstInstr, il.Create(OpCodes.Ldarg_0));
+                il.InsertBefore(firstInstr, il.Create(OpCodes.Call, onMenu));
+                m.Types.Add(new TypeDefinition("BardQuest", "BardQuestSeam_v1",
+                    TypeAttributes.NotPublic | TypeAttributes.Class, m.TypeSystem.Object));
+                m.Write();
+            }
+
+            File.Delete(backup); // simulate out-of-band backup loss
+
+            Assert.False(SeamPatcher.IsManagedDirPatched(managed)); // not the current (v2) marker
+
+            _ = Assert.Throws<InvalidOperationException>(() => SeamPatcher.EnsurePatched(managed));
+
+            // Must not have double-injected the bootstrap seam, and must not have been (re-)patched.
+            Assert.Equal(1, CallCountIn(live, "YARG.Menu.Main", "MainMenu", "OnEnable", "OnMainMenuEnabled"));
+            Assert.False(SeamPatcher.IsManagedDirPatched(managed));
+        }
+        finally { Directory.Delete(managed, recursive: true); }
+    }
 }
