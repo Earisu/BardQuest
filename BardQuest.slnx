@@ -12,6 +12,7 @@
     <Project Path="src/mod/BardQuest.Mod/BardQuest.Mod.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/BardQuest.Domain.Tests/BardQuest.Domain.Tests.csproj" />
     <Project Path="tests/BardQuest.Updater.Tests/BardQuest.Updater.Tests.csproj" />
   </Folder>
 </Solution>
