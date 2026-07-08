@@ -19,4 +19,18 @@ public static class Bootstrap
             Mod.ModLog.Error("Bootstrap failed: " + ex);
         }
     }
+
+    // Injected at the end of YARG's SongContainer.FillContainers(): kicks the (fire-and-forget)
+    // rating build after every library refresh. Must never throw into YARG's scan flow.
+    public static void OnLibraryRefreshed()
+    {
+        try
+        {
+            Mod.Scan.ScanService.OnLibraryRefreshed();
+        }
+        catch (Exception ex)
+        {
+            Mod.ModLog.Error("OnLibraryRefreshed failed: " + ex);
+        }
+    }
 }
