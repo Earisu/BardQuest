@@ -27,9 +27,13 @@ public static class RatingCacheFile
         return RatingCache.Deserialize(fs) ?? [];
     }
 
-    public static void Save(IReadOnlyDictionary<string, IReadOnlyList<ChartRating>> byHash)
+    public static void Save(IReadOnlyDictionary<string, IReadOnlyList<ChartRating>> byHash) => Save(Path(), byHash);
+
+    // Path must be resolved on the main thread (Application.persistentDataPath is a main-thread-only
+    // Unity API) and passed in — this overload itself never touches Path()/Application, so it's safe
+    // to call from a background build thread.
+    public static void Save(string path, IReadOnlyDictionary<string, IReadOnlyList<ChartRating>> byHash)
     {
-        string path = Path();
         string tmp = path + ".tmp";
         using (FileStream fs = File.Create(tmp))
         {

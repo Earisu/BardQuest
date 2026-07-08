@@ -8,8 +8,9 @@ namespace BardQuest.Domain.Ratings;
 /// Versioned binary store for chart ratings, keyed by song hash. Layout: [uint Magic][int Version]
 /// [int songCount], then per song: [string hash][int ratingCount], then per rating:
 /// [byte Instrument][byte Difficulty][int Tier][double SubScore][double RepresentativeNps].
-/// One sequential pass, zero external dependencies (loads under Mono). A magic/version mismatch or a
-/// truncated stream yields null, so the caller rebuilds from scratch (the migration lever).
+/// One sequential pass, zero external dependencies (loads under Mono). A magic/version mismatch, a
+/// truncated stream, or a corrupt (e.g. bogus/negative) count yields null, so the caller rebuilds from
+/// scratch (the migration lever).
 /// </summary>
 public static class RatingCache
 {
@@ -48,12 +49,22 @@ public static class RatingCache
             }
 
             int songCount = r.ReadInt32();
-            var result = new Dictionary<string, List<ChartRating>>(songCount);
+            if (songCount < 0)
+            {
+                return null;
+            }
+
+            var result = new Dictionary<string, List<ChartRating>>();
             for (int i = 0; i < songCount; i++)
             {
                 string hash = r.ReadString();
                 int ratingCount = r.ReadInt32();
-                var ratings = new List<ChartRating>(ratingCount);
+                if (ratingCount < 0)
+                {
+                    return null;
+                }
+
+                var ratings = new List<ChartRating>();
                 for (int j = 0; j < ratingCount; j++)
                 {
                     var instrument = (Instrument)r.ReadByte();
@@ -69,9 +80,9 @@ public static class RatingCache
 
             return result;
         }
-        catch (EndOfStreamException)
+        catch (Exception)
         {
-            return null; // truncated/corrupt — treat as no cache, rebuild
+            return null; // truncated/corrupt (short stream or a bogus count) — treat as no cache, rebuild
         }
     }
 }

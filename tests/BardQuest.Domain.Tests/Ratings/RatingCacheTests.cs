@@ -70,4 +70,19 @@ public class RatingCacheTests
         using var ms = new MemoryStream();
         Assert.Null(RatingCache.Deserialize(ms));
     }
+
+    [Fact]
+    public void Deserialize_CorruptCount_ReturnsNull()
+    {
+        using var ms = new MemoryStream();
+        using (var w = new BinaryWriter(ms, System.Text.Encoding.UTF8, leaveOpen: true))
+        {
+            w.Write(RatingCache.Magic);
+            w.Write(RatingCache.Version);
+            w.Write(int.MaxValue); // bogus songCount, no further data
+        }
+
+        ms.Position = 0;
+        Assert.Null(RatingCache.Deserialize(ms));
+    }
 }

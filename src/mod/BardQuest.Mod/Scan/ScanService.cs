@@ -45,6 +45,9 @@ public static class ScanService
                 return; // a build is already draining; the cache diff will catch anything new next time
             }
 
+            // Resolved here on Unity's main thread — RunBuild's background thread must never touch
+            // Application.persistentDataPath (a main-thread-only Unity API) itself.
+            string cachePath = RatingCacheFile.Path();
             Dictionary<string, List<ChartRating>> cache = RatingCacheFile.Load();
             var work = new List<SongEntry>();
             int relevant = 0;
@@ -70,7 +73,7 @@ public static class ScanService
                 return;
             }
 
-            RunBuild(cache, work, relevant);
+            RunBuild(cachePath, cache, work, relevant);
         }
         catch (Exception ex)
         {
@@ -129,7 +132,7 @@ public static class ScanService
     }
 
     private static void RunBuild(
-        Dictionary<string, List<ChartRating>> cache, List<SongEntry> work, int relevant)
+        string cachePath, Dictionary<string, List<ChartRating>> cache, List<SongEntry> work, int relevant)
     {
         var thread = new Thread(() =>
         {
@@ -190,7 +193,7 @@ public static class ScanService
                     toWrite[kv.Key] = kv.Value;
                 }
 
-                RatingCacheFile.Save(toWrite);
+                RatingCacheFile.Save(cachePath, toWrite);
                 sw.Stop();
                 ModLog.Info(
                     $"Ratings built — {relevant} rated songs, {rated} new rated, {failed} failed, " +
@@ -239,6 +242,7 @@ public static class ScanService
                         continue;
                     }
 
+                    // bpm is not currently wired up; raw intensity is the authoritative tier signal in Phase 1.
                     ratings.Add(analyzer.Analyze(hits, duration, rawIntensity, bpm: 0, ToDomain(diff)));
                     ratedAny = true;
                 }
