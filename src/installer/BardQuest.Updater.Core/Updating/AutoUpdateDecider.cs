@@ -23,12 +23,9 @@ public static class AutoUpdateDecider
             return AutoUpdateAction.None;
         }
 
-        if (!compatible)
-        {
-            return AutoUpdateAction.NeedsAttention;
-        }
-
-        return yargRunning
+        return !compatible
+            ? AutoUpdateAction.NeedsAttention
+            : yargRunning
             ? AutoUpdateAction.WaitForYargExit
             : AutoUpdateAction.ApplyNow;
     }

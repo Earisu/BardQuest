@@ -6,11 +6,14 @@ namespace BardQuest.Updater.Core.Patching;
 public static class SeamPatcher
 {
     private const string MarkerNamespace = "BardQuest";
-    private const string MarkerType = "BardQuestSeam_v1";
+    private const string MarkerType = "BardQuestSeam_v2";
     private const string BootstrapType = "BardQuest.Bootstrap";
     private const string BootstrapMethod = "OnMainMenuEnabled";
     private const string TargetType = "YARG.Menu.Main.MainMenu";
     private const string TargetMethod = "OnEnable";
+    private const string ScanTargetType = "YARG.Song.SongContainer";
+    private const string ScanTargetMethod = "FillContainers";
+    private const string ScanBootstrapMethod = "OnLibraryRefreshed";
 
     public static bool IsPatched(ModuleDefinition module) =>
         module.Types.Any(t => t.Namespace == MarkerNamespace && t.Name == MarkerType);
@@ -43,6 +46,19 @@ public static class SeamPatcher
         il.InsertBefore(first, il.Create(OpCodes.Ldarg_0));
         il.InsertBefore(first, il.Create(OpCodes.Call, bootstrapRef));
 
+        // Second seam: kick BardQuest's rating build at the end of YARG's library refresh.
+        MethodDefinition fillContainers = module.GetType(ScanTargetType)
+            ?.Methods.SingleOrDefault(m => m.Name == ScanTargetMethod && m.Parameters.Count == 0)
+            ?? throw new InvalidOperationException($"Method not found: {ScanTargetType}::{ScanTargetMethod}()");
+
+        MethodReference onRefreshRef = ResolveMod0ArgMethod(module, resolver, managedDir, ScanBootstrapMethod);
+
+        ILProcessor scanIl = fillContainers.Body.GetILProcessor();
+        foreach (Instruction ret in fillContainers.Body.Instructions.Where(i => i.OpCode == OpCodes.Ret).ToList())
+        {
+            scanIl.InsertBefore(ret, scanIl.Create(OpCodes.Call, onRefreshRef));
+        }
+
         // Idempotency marker.
         module.Types.Add(new TypeDefinition(MarkerNamespace, MarkerType,
             TypeAttributes.NotPublic | TypeAttributes.Class, module.TypeSystem.Object));
@@ -71,6 +87,24 @@ public static class SeamPatcher
             : throw new InvalidOperationException("BardQuest.Mod.dll not found and no in-module Bootstrap.");
     }
 
+    private static MethodReference ResolveMod0ArgMethod(
+        ModuleDefinition module, IAssemblyResolver resolver, string managedDir, string methodName)
+    {
+        string modPath = Path.Combine(managedDir, "BardQuest.Mod.dll");
+        if (File.Exists(modPath))
+        {
+            var mod = ModuleDefinition.ReadModule(modPath, new ReaderParameters { AssemblyResolver = resolver });
+            TypeDefinition bootstrap = mod.GetType(BootstrapType)
+                ?? throw new InvalidOperationException($"Type not found in BardQuest.Mod: {BootstrapType}");
+            MethodDefinition method = bootstrap.Methods.Single(m => m.Name == methodName && m.Parameters.Count == 0);
+            return module.ImportReference(method);
+        }
+
+        TypeDefinition inModule = module.GetType(BootstrapType)
+            ?? throw new InvalidOperationException("BardQuest.Mod.dll not found and no in-module Bootstrap.");
+        return module.ImportReference(inModule.Methods.Single(m => m.Name == methodName && m.Parameters.Count == 0));
+    }
+
     public static void Restore(string managedDir)
     {
         foreach (string backup in Directory.GetFiles(managedDir, "*.bardquest-bak"))
@@ -94,23 +128,44 @@ public static class SeamPatcher
         return IsPatched(module);
     }
 
-    // Launcher-clobber-safe patch entry point. If the live DLL is already patched, does nothing.
-    // Otherwise discards any stale backup (the YARC launcher may have replaced Assembly-CSharp.dll
-    // with a newer pristine one, leaving our old .bardquest-bak — patching from that would revert
-    // YARG), so the current live DLL becomes the fresh baseline, then patches.
+    // Launcher-clobber-safe AND marker-version-safe patch entry point.
     public static void EnsurePatched(string managedDir)
     {
-        if (IsManagedDirPatched(managedDir))
+        if (IsManagedDirPatched(managedDir)) // already carries the current (v2) marker
         {
             return;
         }
 
-        string backup = Path.Combine(managedDir, "Assembly-CSharp.dll.bardquest-bak");
+        string live = Path.Combine(managedDir, "Assembly-CSharp.dll");
+        string backup = live + ".bardquest-bak";
+
+        if (HasAnyBardQuestMarker(live) && File.Exists(backup))
+        {
+            // Our own OLDER patch (e.g. v1) over a pristine backup: restore the pristine DLL, then
+            // patch it fresh — never inject on top of an already-patched live (would double the seam).
+            Restore(managedDir);
+            Patch(managedDir);
+            return;
+        }
+
+        // No BardQuest marker: a fresh (launcher-replaced) build. Discard any stale backup so the
+        // current live becomes the pristine baseline, then patch.
         if (File.Exists(backup))
         {
             File.Delete(backup);
         }
 
         Patch(managedDir);
+    }
+
+    private static bool HasAnyBardQuestMarker(string dll)
+    {
+        if (!File.Exists(dll))
+        {
+            return false;
+        }
+
+        using var module = ModuleDefinition.ReadModule(dll);
+        return module.Types.Any(t => t.Namespace == MarkerNamespace && t.Name.StartsWith("BardQuestSeam_"));
     }
 }

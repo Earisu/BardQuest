@@ -25,6 +25,14 @@ public class SeamPatcherEnsureTests
         mainMenu.Methods.Add(onEnable);
         module.Types.Add(mainMenu);
 
+        var songContainer = new TypeDefinition("YARG.Song", "SongContainer",
+            TypeAttributes.Public | TypeAttributes.Abstract | TypeAttributes.Sealed, module.TypeSystem.Object);
+        var fill = new MethodDefinition("FillContainers",
+            MethodAttributes.Private | MethodAttributes.Static, module.TypeSystem.Void);
+        fill.Body.GetILProcessor().Append(Instruction.Create(OpCodes.Ret));
+        songContainer.Methods.Add(fill);
+        module.Types.Add(songContainer);
+
         var bootstrap = new TypeDefinition("BardQuest", "Bootstrap",
             TypeAttributes.Public | TypeAttributes.Class, module.TypeSystem.Object);
         var onMenu = new MethodDefinition("OnMainMenuEnabled",
@@ -32,6 +40,10 @@ public class SeamPatcherEnsureTests
         onMenu.Parameters.Add(new ParameterDefinition(mainMenu));
         onMenu.Body.GetILProcessor().Append(Instruction.Create(OpCodes.Ret));
         bootstrap.Methods.Add(onMenu);
+        var onRefresh = new MethodDefinition("OnLibraryRefreshed",
+            MethodAttributes.Public | MethodAttributes.Static, module.TypeSystem.Void);
+        onRefresh.Body.GetILProcessor().Append(Instruction.Create(OpCodes.Ret));
+        bootstrap.Methods.Add(onRefresh);
         module.Types.Add(bootstrap);
 
         // A unique marker type so tests can tell which build the live DLL currently is.
