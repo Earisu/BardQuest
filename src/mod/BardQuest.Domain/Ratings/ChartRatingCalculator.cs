@@ -5,7 +5,7 @@ namespace BardQuest.Domain.Ratings;
 /// 1..N, where custom songs can exceed 5; it is NOT normalized across games) plus a within-tier
 /// sub-score in [0,1), computed from chart analysis, used only to order songs that share a tier.
 /// The sub-score NEVER moves a song across tiers: SortKey(tier, sub) = tier + sub, and sub &lt; 1.
-/// See <see cref="Ratings.ChartRating"/> for how the star and the per-difficulty
+/// See <see cref="ChartRating"/> for how the star and the per-difficulty
 /// derivation fit together.
 /// </summary>
 public static class ChartRatingCalculator

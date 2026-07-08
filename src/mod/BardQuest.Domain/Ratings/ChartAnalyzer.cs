@@ -94,13 +94,13 @@ public static class ChartAnalyzer
     public static bool HasTomHeavy(IEnumerable<(double Time, DrumPad Pad)> hits)
     {
         var nonKick = hits.Where(h => h.Pad != DrumPad.Kick).ToList();
-        return nonKick.Count == 0 ? false : (double)nonKick.Count(h => TomPads.Contains(h.Pad)) / nonKick.Count > 0.6;
+        return nonKick.Count != 0 && (double)nonKick.Count(h => TomPads.Contains(h.Pad)) / nonKick.Count > 0.6;
     }
 
     public static bool HasCymbalHeavy(IEnumerable<(double Time, DrumPad Pad)> hits)
     {
         var nonKick = hits.Where(h => h.Pad != DrumPad.Kick).ToList();
-        return nonKick.Count == 0 ? false : (double)nonKick.Count(h => CymbalPads.Contains(h.Pad)) / nonKick.Count > 0.6;
+        return nonKick.Count != 0 && (double)nonKick.Count(h => CymbalPads.Contains(h.Pad)) / nonKick.Count > 0.6;
     }
 
     public static bool HasHighDensity(IEnumerable<(double Time, DrumPad Pad)> hits, double threshold)
@@ -112,7 +112,7 @@ public static class ChartAnalyzer
         }
 
         double duration = arr.Max(h => h.Time) - arr.Min(h => h.Time);
-        return duration <= 0 ? false : arr.Length / duration > threshold;
+        return duration > 0 && arr.Length / duration > threshold;
     }
 
     // --- Difficulty profile (Phase 1: nuanced per-chart difficulty) ---
