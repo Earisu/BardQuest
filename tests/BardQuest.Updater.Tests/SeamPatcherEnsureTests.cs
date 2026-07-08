@@ -1,3 +1,5 @@
+using BardQuest.Updater.Core.Patching;
+
 using Mono.Cecil;
 using Mono.Cecil.Cil;
 

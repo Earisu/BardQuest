@@ -20,7 +20,7 @@ jobs:
       - name: Unit tests (YARG-free, Avalonia-free)
         run: dotnet test tests/BardQuest.Updater.Tests -c Release
       - name: Build updater (compile check)
-        run: dotnet build installer/BardQuest.Updater -c Release
+        run: dotnet build src/installer/BardQuest.Updater -c Release
 
   mod-build:
     name: Mod compile gate

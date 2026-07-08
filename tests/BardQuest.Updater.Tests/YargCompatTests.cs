@@ -1,3 +1,5 @@
+using BardQuest.Updater.Core.Compatibility;
+
 using Xunit;
 
 namespace BardQuest.Updater.Tests;

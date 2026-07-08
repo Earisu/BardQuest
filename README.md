@@ -22,7 +22,7 @@ pushing tags — the mod and the updater are versioned and released independentl
 
 ### Which YARG the mod targets
 
-The pinned YARG version is a single line in `mod/BardQuest.Mod/Refs.props`
+The pinned YARG version is a single line in `src/mod/BardQuest.Mod/Refs.props`
 (`<YargTarget>`). It is baked into the mod DLL and read back by CI to choose which YARG to
 download. To target a new YARG, edit that one line in a PR (fixing any mod code the new
 YARG's API requires in the same PR). For a one-off build against a different YARG, branch,

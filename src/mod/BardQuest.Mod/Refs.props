@@ -1,0 +1,30 @@
+<Project>
+  <!-- YargManaged points at YARG's Managed folder (source of the game assemblies the mod binds).
+       Defaults to this repo's sandbox copy so the solution builds out of the box; override with
+       -p:YargManaged=<path> to build against another YARG install. -->
+  <PropertyGroup>
+    <YargManaged Condition="'$(YargManaged)' == ''">$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)../../../yarg-sandbox/YARG.app/Contents/Resources/Data/Managed'))</YargManaged>
+    <!-- The YARG version this mod is built against. Baked into the BardQuestYargTarget
+         marker (see BardQuest.Mod.csproj) and read back by CI to choose which YARG to
+         download. Single source of truth: bump this one line to target a new YARG.
+         Overridable for a throwaway local build via -p:YargTarget=<version>. -->
+    <YargTarget Condition="'$(YargTarget)' == ''">0.15.0</YargTarget>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="Assembly-CSharp" HintPath="$(YargManaged)/Assembly-CSharp.dll" Private="false" />
+    <Reference Include="Assembly-CSharp-firstpass" HintPath="$(YargManaged)/Assembly-CSharp-firstpass.dll" Private="false" />
+    <Reference Include="UnityEngine" HintPath="$(YargManaged)/UnityEngine.dll" Private="false" />
+    <Reference Include="UnityEngine.CoreModule" HintPath="$(YargManaged)/UnityEngine.CoreModule.dll" Private="false" />
+    <Reference Include="UnityEngine.UIElementsModule" HintPath="$(YargManaged)/UnityEngine.UIElementsModule.dll" Private="false" />
+    <Reference Include="UnityEngine.TextRenderingModule" HintPath="$(YargManaged)/UnityEngine.TextRenderingModule.dll" Private="false" />
+    <Reference Include="Unity.InputSystem" HintPath="$(YargManaged)/Unity.InputSystem.dll" Private="false" />
+    <Reference Include="Unity.TextMeshPro" HintPath="$(YargManaged)/Unity.TextMeshPro.dll" Private="false" />
+    <Reference Include="YARG.Core.Package" HintPath="$(YargManaged)/YARG.Core.Package.dll" Private="false">
+      <Aliases>yargpkg</Aliases>
+    </Reference>
+  </ItemGroup>
+  <Target Name="CheckYargManaged" BeforeTargets="BeforeBuild">
+    <Error Condition="!Exists('$(YargManaged)/Assembly-CSharp.dll')"
+           Text="YARG assemblies not found at '$(YargManaged)'. Set up the sandbox (yarg-sandbox/) or pass -p:YargManaged=&lt;path-to-a-YARG-Managed-folder&gt;." />
+  </Target>
+</Project>
