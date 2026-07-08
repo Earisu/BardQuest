@@ -7,23 +7,9 @@ namespace BardQuest.Updater.Core.Releases;
 // Downloads a release zip and locates the folder holding the three mod DLLs.
 public static class ReleaseDownloader
 {
-    public static string? ValidateExtracted(string dir)
-    {
-        if (ContainsAllModDlls(dir))
-        {
-            return dir;
-        }
-
-        foreach (string sub in Directory.GetDirectories(dir))
-        {
-            if (ContainsAllModDlls(sub))
-            {
-                return sub;
-            }
-        }
-
-        return null;
-    }
+    public static string? ValidateExtracted(string dir) => ContainsAllModDlls(dir)
+        ? dir
+        : Directory.GetDirectories(dir).FirstOrDefault(ContainsAllModDlls);
 
     public static async Task<string> DownloadAndExtractAsync(
         HttpClient http, string assetUrl, string destDir, CancellationToken ct = default)
@@ -42,7 +28,7 @@ public static class ReleaseDownloader
             await src.CopyToAsync(dst, ct);
         }
 
-        ZipFile.ExtractToDirectory(zipPath, destDir);
+        await ZipFile.ExtractToDirectoryAsync(zipPath, destDir, ct);
         File.Delete(zipPath);
         return destDir;
     }

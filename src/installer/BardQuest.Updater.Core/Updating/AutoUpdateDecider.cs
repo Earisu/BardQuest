@@ -8,12 +8,28 @@ public static class AutoUpdateDecider
     public static AutoUpdateAction Decide(
         UpdateStatus status, bool yargRunning, bool compatible, bool autoUpdateEnabled)
     {
-        return !autoUpdateEnabled
-            ? AutoUpdateAction.None
-            : status.SeamMissing
-            ? AutoUpdateAction.NeedsAttention
-            : !status.ModUpdateAvailable
-            ? AutoUpdateAction.None
-            : !compatible ? AutoUpdateAction.NeedsAttention : yargRunning ? AutoUpdateAction.WaitForYargExit : AutoUpdateAction.ApplyNow;
+        if (!autoUpdateEnabled)
+        {
+            return AutoUpdateAction.None;
+        }
+
+        if (status.SeamMissing)
+        {
+            return AutoUpdateAction.NeedsAttention;
+        }
+
+        if (!status.ModUpdateAvailable)
+        {
+            return AutoUpdateAction.None;
+        }
+
+        if (!compatible)
+        {
+            return AutoUpdateAction.NeedsAttention;
+        }
+
+        return yargRunning
+            ? AutoUpdateAction.WaitForYargExit
+            : AutoUpdateAction.ApplyNow;
     }
 }

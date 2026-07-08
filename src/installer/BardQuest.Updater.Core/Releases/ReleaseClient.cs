@@ -21,13 +21,8 @@ public static class ReleaseClient
             return null;
         }
 
-        foreach (JsonElement release in doc.RootElement.EnumerateArray())
+        foreach (JsonElement release in doc.RootElement.EnumerateArray().Where(release => !GetBool(release, "draft") && !GetBool(release, "prerelease")))
         {
-            if (GetBool(release, "draft") || GetBool(release, "prerelease"))
-            {
-                continue;
-            }
-
             if (!release.TryGetProperty("tag_name", out JsonElement tagEl)
                 || tagEl.ValueKind != JsonValueKind.String)
             {
