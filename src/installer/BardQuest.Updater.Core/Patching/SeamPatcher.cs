@@ -6,14 +6,14 @@ namespace BardQuest.Updater.Core.Patching;
 public static class SeamPatcher
 {
     private const string MarkerNamespace = "BardQuest";
+    // Idempotency/identity marker for the patched DLL. Kept stable during development — we reset the
+    // sandbox to pristine (restore) and re-patch rather than relying on version-migration. Bump only at
+    // a real release when the injected seam shape changes, so shipped installs re-patch from backup.
     private const string MarkerType = "BardQuestSeam_v2";
     private const string BootstrapType = "BardQuest.Bootstrap";
     private const string BootstrapMethod = "OnMainMenuEnabled";
     private const string TargetType = "YARG.Menu.Main.MainMenu";
     private const string TargetMethod = "OnEnable";
-    private const string ScanTargetType = "YARG.Song.SongContainer";
-    private const string ScanTargetMethod = "FillContainers";
-    private const string ScanBootstrapMethod = "OnLibraryRefreshed";
 
     public static bool IsPatched(ModuleDefinition module) =>
         module.Types.Any(t => t.Namespace == MarkerNamespace && t.Name == MarkerType);
@@ -46,88 +46,11 @@ public static class SeamPatcher
         il.InsertBefore(first, il.Create(OpCodes.Ldarg_0));
         il.InsertBefore(first, il.Create(OpCodes.Call, bootstrapRef));
 
-        // Second seam: kick BardQuest's rating build at the end of YARG's library refresh.
-        MethodDefinition fillContainers = module.GetType(ScanTargetType)
-            ?.Methods.SingleOrDefault(m => m.Name == ScanTargetMethod && m.Parameters.Count == 0)
-            ?? throw new InvalidOperationException($"Method not found: {ScanTargetType}::{ScanTargetMethod}()");
-
-        MethodReference onRefreshRef = ResolveBootstrapMethod(module, resolver, managedDir, ScanBootstrapMethod, paramCount: 0);
-
-        ILProcessor scanIl = fillContainers.Body.GetILProcessor();
-        RouteAllExitsThroughCall(fillContainers, scanIl, onRefreshRef);
-
         // Idempotency marker.
         module.Types.Add(new TypeDefinition(MarkerNamespace, MarkerType,
             TypeAttributes.NotPublic | TypeAttributes.Class, module.TypeSystem.Object));
 
         module.Write(live);
-    }
-
-    // Injects a call at EVERY exit of the method body, instead of naively inserting before each `ret`.
-    // A naive InsertBefore(ret, call) is unreachable dead code when a `leave` (e.g. the normal exit of
-    // a try/finally) jumps straight to that `ret`: the `leave` still targets the original `ret`
-    // instruction, bypassing the call entirely. This routine retargets every branch/leave/switch operand
-    // and every exception-handler boundary that pointed at the `ret` to point at the injected `call`
-    // instead, so all control flow is forced through the call before it can reach the `ret`.
-    private static void RouteAllExitsThroughCall(MethodDefinition method, ILProcessor il, MethodReference callee)
-    {
-        // Snapshot the `ret` list before mutating the body.
-        List<Instruction> rets = [.. method.Body.Instructions.Where(i => i.OpCode == OpCodes.Ret)];
-        foreach (Instruction ret in rets)
-        {
-            Instruction call = il.Create(OpCodes.Call, callee);
-            il.InsertBefore(ret, call);
-
-            // Retarget branch/leave/switch operands that pointed at this ret to the new call.
-            foreach (Instruction ins in method.Body.Instructions)
-            {
-                if (ins.Operand is Instruction target && target == ret)
-                {
-                    ins.Operand = call;
-                }
-                else if (ins.Operand is Instruction[] targets)
-                {
-                    for (int i2 = 0; i2 < targets.Length; i2++)
-                    {
-                        if (targets[i2] == ret)
-                        {
-                            targets[i2] = call;
-                        }
-                    }
-                }
-            }
-
-            // Retarget exception-handler boundaries that pointed at this ret to the new call, so the
-            // call ends up outside every try/handler region (Try/Handler/Filter End are exclusive
-            // upper bounds) rather than inside the finally/catch it was meant to run after.
-            foreach (ExceptionHandler eh in method.Body.ExceptionHandlers)
-            {
-                if (eh.TryStart == ret)
-                {
-                    eh.TryStart = call;
-                }
-
-                if (eh.TryEnd == ret)
-                {
-                    eh.TryEnd = call;
-                }
-
-                if (eh.HandlerStart == ret)
-                {
-                    eh.HandlerStart = call;
-                }
-
-                if (eh.HandlerEnd == ret)
-                {
-                    eh.HandlerEnd = call;
-                }
-
-                if (eh.FilterStart == ret)
-                {
-                    eh.FilterStart = call;
-                }
-            }
-        }
     }
 
     // Locates a static method on BardQuest.Bootstrap by name+arity: prefers the real BardQuest.Mod.dll
@@ -186,9 +109,9 @@ public static class SeamPatcher
             return;
         }
 
-        // 2. An OLDER BardQuest marker is present → this is a v1→v2 field update. Restore the
-        //    pristine DLL from backup, then re-patch, so the bootstrap seam is never injected
-        //    twice on top of an already-seamed live DLL.
+        // 2. An OLDER BardQuest marker is present → this is a marker-version field update. Restore the
+        //    pristine DLL from backup, then re-patch, so the seam is never injected twice on top of an
+        //    already-seamed live DLL (and any seam dropped between versions is cleanly gone).
         if (HasAnyBardQuestMarker(live))
         {
             if (!File.Exists(backup))

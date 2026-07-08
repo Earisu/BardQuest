@@ -9,6 +9,18 @@ if [[ ! -f "$YARG_MANAGED/Assembly-CSharp.dll" ]]; then
   exit 1
 fi
 
+# `deploy-sandbox.sh restore` un-patches the sandbox back to stock (restores the original
+# Assembly-CSharp.dll from its .bardquest-bak backup and removes the backup). Use it to reset to a
+# clean install during development instead of bumping seam/cache versions to force a re-patch.
+if [[ "${1:-}" == "restore" ]]; then
+  echo "Building updater..."
+  dotnet build "$ROOT/src/installer/BardQuest.Updater/BardQuest.Updater.csproj" -c Release
+  echo "Restoring sandbox to stock (removing BardQuest patch)..."
+  dotnet "$ROOT/src/installer/BardQuest.Updater/bin/Release/net10.0/BardQuest.Updater.dll" \
+    restore "$YARG_MANAGED"
+  exit 0
+fi
+
 echo "Building mod against sandbox Managed..."
 dotnet build "$ROOT/src/mod/BardQuest.Mod/BardQuest.Mod.csproj" -c Debug -p:YargManaged="$YARG_MANAGED" -p:ModVersion=0.0.0-dev
 

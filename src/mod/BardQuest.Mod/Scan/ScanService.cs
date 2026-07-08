@@ -16,8 +16,9 @@ using RtInstrument = yargpkg::YARG.Core.Instrument;    // runtime instrument enu
 
 namespace BardQuest.Mod.Scan;
 
-// Fire-and-forget rating build. Kicked from the FillContainers seam on Unity's main thread: it
-// loads the cache + diffs (cheap, main thread), then parses only-new charts on a background pool.
+// Fire-and-forget rating build. Kicked from BardQuestManager.OpenCanvas (when the player enters the
+// BardQuest screen) on Unity's main thread: it loads the cache + diffs (cheap, main thread), then
+// parses only-new charts on a background pool.
 // Instrument-agnostic: one LoadChart per song fans out to every registered analyzer.
 //
 // Two-YARG.Core bridge: the DOMAIN (ChartRating, analyzers) speaks the vendored YARG.Core enums;
@@ -36,7 +37,11 @@ public static class ScanService
     private static RtInstrument ToRuntime(YARG.Core.Instrument i) => (RtInstrument)(byte)i;
     private static YARG.Core.Difficulty ToDomain(RtDifficulty d) => (YARG.Core.Difficulty)(byte)d;
 
-    public static void OnLibraryRefreshed()
+    // Kicked (fire-and-forget) when the player opens the BardQuest screen. Loads the cache, diffs it
+    // against the already-scanned SongContainer.Songs on the main thread, and spawns the background
+    // build only for charts that are missing. A build already in flight, or a warm library with
+    // nothing new, returns near-instantly.
+    public static void EnsureRatings()
     {
         try
         {

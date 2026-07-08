@@ -30,6 +30,9 @@ public sealed class BardQuestManager : MonoBehaviour
 
     public void OpenCanvas()
     {
+        // Rate on demand: entering BardQuest is what triggers the (fire-and-forget) rating build, so
+        // YARG's own launch/scan is never burdened with it. EnsureRatings self-guards and never throws.
+        Scan.ScanService.EnsureRatings();
         _canvas ??= new BardQuestCanvas();
         _canvas.Show();
     }

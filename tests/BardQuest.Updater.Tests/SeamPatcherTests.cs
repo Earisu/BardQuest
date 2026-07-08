@@ -27,15 +27,6 @@ public class SeamPatcherTests
         il.Append(il.Create(OpCodes.Ret));
         mainMenu.Methods.Add(onEnable);
 
-        // A stand-in SongContainer type so the patcher has a second seam target to inject.
-        var songContainer = new TypeDefinition("YARG.Song", "SongContainer",
-            TypeAttributes.Public | TypeAttributes.Abstract | TypeAttributes.Sealed, module.TypeSystem.Object);
-        var fill = new MethodDefinition("FillContainers",
-            MethodAttributes.Private | MethodAttributes.Static, module.TypeSystem.Void);
-        fill.Body.GetILProcessor().Append(Instruction.Create(OpCodes.Ret));
-        songContainer.Methods.Add(fill);
-        module.Types.Add(songContainer);
-
         // A stand-in Bootstrap type so the patcher has a call target to import.
         var bootstrap = new TypeDefinition("BardQuest", "Bootstrap",
             TypeAttributes.Public | TypeAttributes.Class, module.TypeSystem.Object);
@@ -45,10 +36,6 @@ public class SeamPatcherTests
         ILProcessor bil = onMenu.Body.GetILProcessor();
         bil.Append(bil.Create(OpCodes.Ret));
         bootstrap.Methods.Add(onMenu);
-        var onRefresh = new MethodDefinition("OnLibraryRefreshed",
-            MethodAttributes.Public | MethodAttributes.Static, module.TypeSystem.Void);
-        onRefresh.Body.GetILProcessor().Append(Instruction.Create(OpCodes.Ret));
-        bootstrap.Methods.Add(onRefresh);
         module.Types.Add(bootstrap);
 
         asm.Write(Path.Combine(root, "Assembly-CSharp.dll"));
