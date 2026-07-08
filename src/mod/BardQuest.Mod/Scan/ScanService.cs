@@ -1,4 +1,5 @@
 extern alias yargpkg;
+
 using System.Collections.Concurrent;
 using System.Diagnostics;
 
@@ -132,67 +133,77 @@ public static class ScanService
     {
         var thread = new Thread(() =>
         {
-            var sw = Stopwatch.StartNew();
-            var queue = new BlockingCollection<SongEntry>();
-            var results = new ConcurrentDictionary<string, List<ChartRating>>();
-            int rated = 0;
-            int failed = 0;
-
-            var workers = new Thread[WorkerCount];
-            for (int i = 0; i < WorkerCount; i++)
+            try
             {
-                workers[i] = new Thread(() =>
+                var sw = Stopwatch.StartNew();
+                var queue = new BlockingCollection<SongEntry>();
+                var results = new ConcurrentDictionary<string, List<ChartRating>>();
+                int rated = 0;
+                int failed = 0;
+
+                var workers = new Thread[WorkerCount];
+                for (int i = 0; i < WorkerCount; i++)
                 {
-                    foreach (SongEntry entry in queue.GetConsumingEnumerable())
+                    workers[i] = new Thread(() =>
                     {
-                        try
+                        foreach (SongEntry entry in queue.GetConsumingEnumerable())
                         {
-                            List<ChartRating> ratings = RateEntry(entry);
-                            if (ratings.Count > 0)
+                            try
                             {
-                                results[entry.Hash.ToString()] = ratings;
-                                _ = Interlocked.Increment(ref rated);
+                                List<ChartRating> ratings = RateEntry(entry);
+                                if (ratings.Count > 0)
+                                {
+                                    results[entry.Hash.ToString()] = ratings;
+                                    _ = Interlocked.Increment(ref rated);
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                _ = Interlocked.Increment(ref failed);
+                                Debug.LogWarning($"[BardQuest] rate failed for {entry.Name}: {ex.Message}");
                             }
                         }
-                        catch (Exception ex)
-                        {
-                            _ = Interlocked.Increment(ref failed);
-                            Debug.LogWarning($"[BardQuest] rate failed for {entry.Name}: {ex.Message}");
-                        }
-                    }
-                })
-                { IsBackground = true, Name = "BardQuestRate" };
-                workers[i].Start();
-            }
+                    })
+                    { IsBackground = true, Name = "BardQuestRate" };
+                    workers[i].Start();
+                }
 
-            foreach (SongEntry entry in work)
+                foreach (SongEntry entry in work)
+                {
+                    queue.Add(entry);
+                }
+
+                queue.CompleteAdding();
+                foreach (Thread w in workers)
+                {
+                    w.Join();
+                }
+
+                foreach (KeyValuePair<string, List<ChartRating>> kv in results)
+                {
+                    cache[kv.Key] = kv.Value;
+                }
+
+                var toWrite = new Dictionary<string, IReadOnlyList<ChartRating>>(cache.Count);
+                foreach (KeyValuePair<string, List<ChartRating>> kv in cache)
+                {
+                    toWrite[kv.Key] = kv.Value;
+                }
+
+                RatingCacheFile.Save(toWrite);
+                sw.Stop();
+                ModLog.Info(
+                    $"Ratings built — {relevant} rated songs, {rated} new rated, {failed} failed, " +
+                    $"in {sw.Elapsed.TotalSeconds:F1}s (workers={WorkerCount}).");
+            }
+            catch (Exception ex)
             {
-                queue.Add(entry);
+                ModLog.Error("Rating build failed: " + ex);
             }
-
-            queue.CompleteAdding();
-            foreach (Thread w in workers)
+            finally
             {
-                w.Join();
+                _ = Interlocked.Exchange(ref _running, 0);
             }
-
-            foreach (KeyValuePair<string, List<ChartRating>> kv in results)
-            {
-                cache[kv.Key] = kv.Value;
-            }
-
-            var toWrite = new Dictionary<string, IReadOnlyList<ChartRating>>(cache.Count);
-            foreach (KeyValuePair<string, List<ChartRating>> kv in cache)
-            {
-                toWrite[kv.Key] = kv.Value;
-            }
-
-            RatingCacheFile.Save(toWrite);
-            sw.Stop();
-            ModLog.Info(
-                $"Ratings built — {relevant} rated songs, {rated} new rated, {failed} failed, " +
-                $"in {sw.Elapsed.TotalSeconds:F1}s (workers={WorkerCount}).");
-            _ = Interlocked.Exchange(ref _running, 0);
         })
         { IsBackground = true, Name = "BardQuestRateBuild" };
         thread.Start();
@@ -202,10 +213,6 @@ public static class ScanService
     {
         var ratings = new List<ChartRating>();
         SongChart chart = entry.LoadChart();
-        if (chart == null)
-        {
-            return ratings;
-        }
 
         foreach (IChartRatingAnalyzer analyzer in Analyzers)
         {
@@ -215,20 +222,37 @@ public static class ScanService
                 continue;
             }
 
-            int rawIntensity = Intensity(entry, runtimeInstrument);
+            bool ratedAny = false;
 
-            // Phase 1: the only registered analyzer is drums, so the drum extractor applies.
-            // A future instrument pairs its own extractor with its analyzer here.
-            foreach (RtDifficulty diff in DrumChartExtractor.AvailableDifficulties(chart))
+            if (chart != null)
             {
-                IReadOnlyList<(double Time, int Lane)> hits =
-                    DrumChartExtractor.Extract(chart, diff, out double duration);
-                if (hits.Count == 0)
-                {
-                    continue;
-                }
+                int rawIntensity = Intensity(entry, runtimeInstrument);
 
-                ratings.Add(analyzer.Analyze(hits, duration, rawIntensity, bpm: 0, ToDomain(diff)));
+                // Phase 1: the only registered analyzer is drums, so the drum extractor applies.
+                // A future instrument pairs its own extractor with its analyzer here.
+                foreach (RtDifficulty diff in DrumChartExtractor.AvailableDifficulties(chart))
+                {
+                    IReadOnlyList<(double Time, int Lane)> hits =
+                        DrumChartExtractor.Extract(chart, diff, out double duration);
+                    if (hits.Count == 0)
+                    {
+                        continue;
+                    }
+
+                    ratings.Add(analyzer.Analyze(hits, duration, rawIntensity, bpm: 0, ToDomain(diff)));
+                    ratedAny = true;
+                }
+            }
+
+            if (!ratedAny)
+            {
+                // Negative-cache marker: the song's metadata claims this instrument, but no rateable
+                // chart could be loaded/extracted. Tier < 0 flags "attempted, unrateable" so
+                // NeedsRating won't re-parse this hash every refresh — while a LATER-added analyzer
+                // instrument (absent from the cached list entirely) still triggers re-rating. The
+                // Difficulty field is irrelevant for a sentinel (NeedsRating matches on Instrument
+                // only); use Difficulty.Expert as a documented don't-care.
+                ratings.Add(new ChartRating(analyzer.Instrument, YARG.Core.Difficulty.Expert, -1, 0, 0));
             }
         }
 
