@@ -24,7 +24,7 @@ runs:
       shell: bash
       run: |
         set -euo pipefail
-        yarg="$(dotnet msbuild mod/BardQuest.Mod/BardQuest.Mod.csproj -getProperty:YargTarget)"
+        yarg="$(dotnet msbuild src/mod/BardQuest.Mod/BardQuest.Mod.csproj -getProperty:YargTarget)"
         yarg="$(printf '%s' "$yarg" | tr -d '[:space:]')"
         test -n "$yarg" || { echo "::error::YargTarget property is empty"; exit 1; }
         echo "yarg-version=$yarg" >> "$GITHUB_OUTPUT"
@@ -60,11 +60,11 @@ runs:
       run: |
         set -euo pipefail
         managed="$(pwd)/yarg-managed"
-        dotnet build mod/BardQuest.Mod/BardQuest.Mod.csproj \
+        dotnet build src/mod/BardQuest.Mod/BardQuest.Mod.csproj \
           -c "${{ inputs.configuration }}" \
           -p:YargManaged="$managed" \
           -p:ModVersion="${{ inputs.mod-version }}"
-        dir="$(pwd)/mod/BardQuest.Mod/bin/${{ inputs.configuration }}"
+        dir="$(pwd)/src/mod/BardQuest.Mod/bin/${{ inputs.configuration }}"
         for n in BardQuest.Mod.dll BardQuest.Domain.dll YARG.Core.dll; do
           test -f "$dir/$n" || { echo "::error::missing $n in $dir"; exit 1; }
         done

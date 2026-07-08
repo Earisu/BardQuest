@@ -1,8 +1,9 @@
 # Third-party notices
 
 The [MIT license](LICENSE) in this repository covers BardQuest's own code:
-`src/BardQuest.Domain`, `mod/BardQuest.Mod`, `installer/BardQuest.Installer`,
-`tests/`, and `scripts/`. It does not cover the third-party components below.
+`src/mod/BardQuest.Domain`, `src/mod/BardQuest.Mod`, `src/installer/BardQuest.Updater.Core`,
+`src/installer/BardQuest.Updater`, `tests/`, and `scripts/`. It does not cover the
+third-party components below.
 
 ## YARG.Core (`lib/YARG.Core`)
 
@@ -27,7 +28,7 @@ present on the user's machine. YARG itself — also LGPL-3.0
 ([YARC-Official/YARG](https://github.com/YARC-Official/YARG)) — is never
 copied, modified, or redistributed by this project.
 
-## Mono.Cecil (`installer/BardQuest.Installer`)
+## Mono.Cecil (`src/installer/BardQuest.Updater.Core`)
 
 [jbevain/cecil](https://github.com/jbevain/cecil), MIT licensed, used by the
 installer to patch the single seam call into `MainMenu.OnEnable`.

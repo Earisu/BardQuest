@@ -1,3 +1,6 @@
+using BardQuest.Updater.Core.Patching;
+using BardQuest.Updater.Core.Updating;
+
 using Mono.Cecil;
 
 using Xunit;
