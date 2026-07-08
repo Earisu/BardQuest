@@ -1,15 +1,5 @@
 namespace BardQuest.Updater;
 
-public enum ApplyOutcome
-{
-    Applied,
-    Incompatible,
-    MissingFiles,
-}
-
-public readonly record struct ApplyResult(
-    ApplyOutcome Outcome, string? Version, string? ModTarget, string? InstallTag);
-
 // Shared download → gate → apply pipeline used by both the GUI (Install/Update) and the
 // background tray updater. Persisting config is the caller's responsibility.
 public static class ModUpdateApplier

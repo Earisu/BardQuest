@@ -1,13 +1,5 @@
 namespace BardQuest.Updater;
 
-public enum AutoUpdateAction
-{
-    None,
-    ApplyNow,
-    WaitForYargExit,
-    NeedsAttention,
-}
-
 // Pure decision for the background updater: given the current update status, whether
 // YARG is running, whether the downloaded build is compatible with the installed YARG,
 // and whether the user has auto-update enabled, decide what the tray service should do.
@@ -26,11 +18,8 @@ public static class AutoUpdateDecider
             return AutoUpdateAction.NeedsAttention;
         }
 
-        if (!status.ModUpdateAvailable)
-        {
-            return AutoUpdateAction.None;
-        }
-
-        return !compatible ? AutoUpdateAction.NeedsAttention : yargRunning ? AutoUpdateAction.WaitForYargExit : AutoUpdateAction.ApplyNow;
+        return !status.ModUpdateAvailable
+            ? AutoUpdateAction.None
+            : !compatible ? AutoUpdateAction.NeedsAttention : yargRunning ? AutoUpdateAction.WaitForYargExit : AutoUpdateAction.ApplyNow;
     }
 }

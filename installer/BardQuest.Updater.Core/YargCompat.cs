@@ -1,12 +1,5 @@
 namespace BardQuest.Updater;
 
-public enum Compatibility
-{
-    Compatible,
-    Incompatible,
-    Unverified,
-}
-
 // Decides whether a mod build (compiled against a specific YARG version) may be
 // installed into a given YARG install, comparing the mod's baked YargTarget to
 // the install's tag. Unknown on either side is "unverified" (allowed), not blocked.
