@@ -18,12 +18,9 @@ public static class AutoUpdateDecider
             return AutoUpdateAction.NeedsAttention;
         }
 
-        if (!status.ModUpdateAvailable)
-        {
-            return AutoUpdateAction.None;
-        }
-
-        return !compatible
+        return !status.ModUpdateAvailable
+            ? AutoUpdateAction.None
+            : !compatible
             ? AutoUpdateAction.NeedsAttention
             : yargRunning
             ? AutoUpdateAction.WaitForYargExit

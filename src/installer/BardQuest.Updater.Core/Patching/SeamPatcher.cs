@@ -54,16 +54,80 @@ public static class SeamPatcher
         MethodReference onRefreshRef = ResolveBootstrapMethod(module, resolver, managedDir, ScanBootstrapMethod, paramCount: 0);
 
         ILProcessor scanIl = fillContainers.Body.GetILProcessor();
-        foreach (Instruction ret in fillContainers.Body.Instructions.Where(i => i.OpCode == OpCodes.Ret).ToList())
-        {
-            scanIl.InsertBefore(ret, scanIl.Create(OpCodes.Call, onRefreshRef));
-        }
+        RouteAllExitsThroughCall(fillContainers, scanIl, onRefreshRef);
 
         // Idempotency marker.
         module.Types.Add(new TypeDefinition(MarkerNamespace, MarkerType,
             TypeAttributes.NotPublic | TypeAttributes.Class, module.TypeSystem.Object));
 
         module.Write(live);
+    }
+
+    // Injects a call at EVERY exit of the method body, instead of naively inserting before each `ret`.
+    // A naive InsertBefore(ret, call) is unreachable dead code when a `leave` (e.g. the normal exit of
+    // a try/finally) jumps straight to that `ret`: the `leave` still targets the original `ret`
+    // instruction, bypassing the call entirely. This routine retargets every branch/leave/switch operand
+    // and every exception-handler boundary that pointed at the `ret` to point at the injected `call`
+    // instead, so all control flow is forced through the call before it can reach the `ret`.
+    private static void RouteAllExitsThroughCall(MethodDefinition method, ILProcessor il, MethodReference callee)
+    {
+        // Snapshot the `ret` list before mutating the body.
+        List<Instruction> rets = [.. method.Body.Instructions.Where(i => i.OpCode == OpCodes.Ret)];
+        foreach (Instruction ret in rets)
+        {
+            Instruction call = il.Create(OpCodes.Call, callee);
+            il.InsertBefore(ret, call);
+
+            // Retarget branch/leave/switch operands that pointed at this ret to the new call.
+            foreach (Instruction ins in method.Body.Instructions)
+            {
+                if (ins.Operand is Instruction target && target == ret)
+                {
+                    ins.Operand = call;
+                }
+                else if (ins.Operand is Instruction[] targets)
+                {
+                    for (int i2 = 0; i2 < targets.Length; i2++)
+                    {
+                        if (targets[i2] == ret)
+                        {
+                            targets[i2] = call;
+                        }
+                    }
+                }
+            }
+
+            // Retarget exception-handler boundaries that pointed at this ret to the new call, so the
+            // call ends up outside every try/handler region (Try/Handler/Filter End are exclusive
+            // upper bounds) rather than inside the finally/catch it was meant to run after.
+            foreach (ExceptionHandler eh in method.Body.ExceptionHandlers)
+            {
+                if (eh.TryStart == ret)
+                {
+                    eh.TryStart = call;
+                }
+
+                if (eh.TryEnd == ret)
+                {
+                    eh.TryEnd = call;
+                }
+
+                if (eh.HandlerStart == ret)
+                {
+                    eh.HandlerStart = call;
+                }
+
+                if (eh.HandlerEnd == ret)
+                {
+                    eh.HandlerEnd = call;
+                }
+
+                if (eh.FilterStart == ret)
+                {
+                    eh.FilterStart = call;
+                }
+            }
+        }
     }
 
     // Locates a static method on BardQuest.Bootstrap by name+arity: prefers the real BardQuest.Mod.dll

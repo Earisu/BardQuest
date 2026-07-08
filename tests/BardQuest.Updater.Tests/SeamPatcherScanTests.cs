@@ -30,7 +30,28 @@ public class SeamPatcherScanTests
             TypeAttributes.Public | TypeAttributes.Abstract | TypeAttributes.Sealed, module.TypeSystem.Object);
         var fill = new MethodDefinition("FillContainers",
             MethodAttributes.Private | MethodAttributes.Static, module.TypeSystem.Void);
-        fill.Body.GetILProcessor().Append(Instruction.Create(OpCodes.Ret));
+        // Mirror the real FillContainers' shape: a try/finally (disposing an enumerator) whose
+        // normal exit is a `leave` targeting the method's final `ret` directly, with the `ret`
+        // sitting AFTER the handler's `endfinally`. A naive before-ret insert produces dead code
+        // here exactly like the real method, because the `leave` still jumps straight past it.
+        ILProcessor fillIl = fill.Body.GetILProcessor();
+        var tryStart = Instruction.Create(OpCodes.Nop);
+        var ret = Instruction.Create(OpCodes.Ret);
+        var leave = Instruction.Create(OpCodes.Leave_S, ret);
+        var handlerStart = Instruction.Create(OpCodes.Nop);
+        var endFinally = Instruction.Create(OpCodes.Endfinally);
+        fillIl.Append(tryStart);
+        fillIl.Append(leave);
+        fillIl.Append(handlerStart);
+        fillIl.Append(endFinally);
+        fillIl.Append(ret);
+        fill.Body.ExceptionHandlers.Add(new ExceptionHandler(ExceptionHandlerType.Finally)
+        {
+            TryStart = tryStart,
+            TryEnd = handlerStart,
+            HandlerStart = handlerStart,
+            HandlerEnd = ret,
+        });
         songContainer.Methods.Add(fill);
         module.Types.Add(songContainer);
 
@@ -176,6 +197,71 @@ public class SeamPatcherScanTests
             // Must not have double-injected the bootstrap seam, and must not have been (re-)patched.
             Assert.Equal(1, CallCountIn(live, "YARG.Menu.Main", "MainMenu", "OnEnable", "OnMainMenuEnabled"));
             Assert.False(SeamPatcher.IsManagedDirPatched(managed));
+        }
+        finally { Directory.Delete(managed, recursive: true); }
+    }
+
+    // Structural regression test for the leave-bypass bug: a naive InsertBefore(ret, call) leaves the
+    // `leave` inside the synthetic try/finally still targeting the original `ret`, so the injected
+    // call is unreachable dead code. After Patch, EVERY exit must be routed through the call:
+    // no ret is reachable except by falling through the call, and no branch/leave/switch/handler
+    // boundary still points at a ret.
+    [Fact]
+    public void Patch_RoutesEveryExitThroughTheFillContainersSeam()
+    {
+        string managed = Path.Combine(Path.GetTempPath(), "bq-scan3-" + Guid.NewGuid());
+        try
+        {
+            WriteAssembly(managed);
+            string live = Path.Combine(managed, "Assembly-CSharp.dll");
+
+            SeamPatcher.Patch(managed);
+
+            using var m = ModuleDefinition.ReadModule(live);
+            MethodDefinition fill = m.GetType("YARG.Song.SongContainer").Methods.Single(x => x.Name == "FillContainers");
+            var instructions = fill.Body.Instructions.ToList();
+            var rets = instructions.Where(i => i.OpCode == OpCodes.Ret).ToList();
+            Assert.NotEmpty(rets);
+
+            // 1. Every ret is immediately preceded by the injected call.
+            foreach (Instruction ret in rets)
+            {
+                int index = instructions.IndexOf(ret);
+                Assert.True(index > 0, "ret must not be the first instruction in the method");
+                Instruction previous = instructions[index - 1];
+                Assert.Equal(OpCodes.Call, previous.OpCode);
+                Assert.Equal("OnLibraryRefreshed", ((MethodReference)previous.Operand).Name);
+            }
+
+            // 2. No instruction operand (branch/leave/switch target) still points at a ret.
+            foreach (Instruction ins in instructions)
+            {
+                if (ins.Operand is Instruction target)
+                {
+                    Assert.DoesNotContain(target, rets);
+                }
+                else if (ins.Operand is Instruction[] targets)
+                {
+                    foreach (Instruction t in targets)
+                    {
+                        Assert.DoesNotContain(t, rets);
+                    }
+                }
+            }
+
+            // 3. No exception-handler boundary still points at a ret (it would place the call
+            // inside the finally region, which is invalid IL, instead of at the true method exit).
+            foreach (ExceptionHandler eh in fill.Body.ExceptionHandlers)
+            {
+                Assert.DoesNotContain(eh.TryStart, rets);
+                Assert.DoesNotContain(eh.TryEnd, rets);
+                Assert.DoesNotContain(eh.HandlerStart, rets);
+                Assert.DoesNotContain(eh.HandlerEnd, rets);
+                if (eh.FilterStart is not null)
+                {
+                    Assert.DoesNotContain(eh.FilterStart, rets);
+                }
+            }
         }
         finally { Directory.Delete(managed, recursive: true); }
     }
