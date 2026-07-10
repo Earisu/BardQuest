@@ -28,8 +28,6 @@ public static class AutoUpdateDecider
             return AutoUpdateAction.NeedsAttention;
         }
 
-        return yargRunning
-            ? AutoUpdateAction.WaitForYargExit
-            : AutoUpdateAction.ApplyNow;
+        return yargRunning ? AutoUpdateAction.WaitForYargExit : AutoUpdateAction.ApplyNow;
     }
 }

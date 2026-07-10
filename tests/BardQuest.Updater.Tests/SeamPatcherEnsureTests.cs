@@ -47,6 +47,82 @@ public class SeamPatcherEnsureTests
         return m.Types.Any(t => t.Namespace == ns && t.Name == name);
     }
 
+    private static int CallCountIn(string dll, string ns, string type, string method, string calleeName)
+    {
+        using var m = ModuleDefinition.ReadModule(dll);
+        MethodDefinition target = m.GetType(ns + "." + type).Methods.Single(x => x.Name == method);
+        return target.Body.Instructions.Count(i =>
+            i.OpCode == OpCodes.Call && ((MethodReference)i.Operand).Name == calleeName);
+    }
+
+    // Hand-crafts an OLD-marker live DLL over the pristine build: one bootstrap seam already injected
+    // plus a superseded BardQuestSeam_v1 marker, exactly as a prior BardQuest version would have left it.
+    private static void SeamWithOldMarker(string live)
+    {
+        using var m = ModuleDefinition.ReadModule(live, new ReaderParameters { ReadWrite = true });
+        MethodDefinition onEnable = m.GetType("YARG.Menu.Main.MainMenu").Methods.Single(x => x.Name == "OnEnable");
+        MethodDefinition onMenu = m.GetType("BardQuest.Bootstrap").Methods.Single(x => x.Name == "OnMainMenuEnabled");
+        ILProcessor il = onEnable.Body.GetILProcessor();
+        Instruction firstInstr = onEnable.Body.Instructions[0];
+        il.InsertBefore(firstInstr, il.Create(OpCodes.Ldarg_0));
+        il.InsertBefore(firstInstr, il.Create(OpCodes.Call, onMenu));
+        m.Types.Add(new TypeDefinition("BardQuest", "BardQuestSeam_v1",
+            TypeAttributes.NotPublic | TypeAttributes.Class, m.TypeSystem.Object));
+        m.Write();
+    }
+
+    // A superseded-marker install (older BardQuest) with its pristine backup intact must re-patch
+    // cleanly from the backup — NOT inject a second bootstrap call on top of the already-seamed live.
+    [Fact]
+    public void EnsurePatched_FromOlderMarkerVersion_DoesNotDoubleInjectBootstrap()
+    {
+        string managed = Path.Combine(Path.GetTempPath(), "bq-oldmarker-" + Guid.NewGuid());
+        try
+        {
+            WriteAssembly(managed, "Base");
+            string live = Path.Combine(managed, "Assembly-CSharp.dll");
+            File.Copy(live, live + ".bardquest-bak"); // pristine backup, as a real old install left it
+            SeamWithOldMarker(live);
+
+            Assert.False(SeamPatcher.IsManagedDirPatched(managed)); // not the current marker
+            Assert.Equal(1, CallCountIn(live, "YARG.Menu.Main", "MainMenu", "OnEnable", "OnMainMenuEnabled"));
+
+            SeamPatcher.EnsurePatched(managed);
+
+            Assert.True(SeamPatcher.IsManagedDirPatched(managed));
+            // Exactly one bootstrap call (NOT two) after the version migration.
+            Assert.Equal(1, CallCountIn(live, "YARG.Menu.Main", "MainMenu", "OnEnable", "OnMainMenuEnabled"));
+        }
+        finally { Directory.Delete(managed, recursive: true); }
+    }
+
+    // A superseded-marker install whose pristine backup was lost out-of-band (antivirus, manual cleanup)
+    // while the already-seamed live survives: EnsurePatched must refuse to patch on top of it (which would
+    // double-inject the bootstrap seam) and throw instead.
+    [Fact]
+    public void EnsurePatched_MarkerPresentButBackupMissing_Throws()
+    {
+        string managed = Path.Combine(Path.GetTempPath(), "bq-nobak-" + Guid.NewGuid());
+        try
+        {
+            WriteAssembly(managed, "Base");
+            string live = Path.Combine(managed, "Assembly-CSharp.dll");
+            string backup = live + ".bardquest-bak";
+            File.Copy(live, backup);
+            SeamWithOldMarker(live);
+            File.Delete(backup); // simulate out-of-band backup loss
+
+            Assert.False(SeamPatcher.IsManagedDirPatched(managed));
+
+            _ = Assert.Throws<InvalidOperationException>(() => SeamPatcher.EnsurePatched(managed));
+
+            // Must not have double-injected the bootstrap seam, and must not have been (re-)patched.
+            Assert.Equal(1, CallCountIn(live, "YARG.Menu.Main", "MainMenu", "OnEnable", "OnMainMenuEnabled"));
+            Assert.False(SeamPatcher.IsManagedDirPatched(managed));
+        }
+        finally { Directory.Delete(managed, recursive: true); }
+    }
+
     [Fact]
     public void EnsurePatched_AfterLauncherReplacesDll_DoesNotRevertToStaleBackup()
     {

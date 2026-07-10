@@ -170,10 +170,19 @@ public sealed class MainViewModel : INotifyPropertyChanged
         ModAssemblyInfo installed = HasManagedDir
             ? ModAssemblyReader.Read(Path.Combine(_config.ManagedDir!, "BardQuest.Mod.dll"))
             : default;
-        InstalledDisplay = installed.ModVersion is { } iv
-            ? iv + (installed.YargTarget is { } it ? $" (for YARG {it})" : "")
-            : "(not installed)";
+        InstalledDisplay = BuildInstalledDisplay(installed);
         OnPropertyChanged(nameof(CanAct));
+    }
+
+    private static string BuildInstalledDisplay(ModAssemblyInfo installed)
+    {
+        if (installed.ModVersion is not { } iv)
+        {
+            return "(not installed)";
+        }
+
+        string target = installed.YargTarget is { } it ? $" (for YARG {it})" : "";
+        return iv + target;
     }
 
     public async Task InstallAsync()
@@ -248,7 +257,6 @@ public sealed class MainViewModel : INotifyPropertyChanged
             case ApplyOutcome.Incompatible:
                 Status = $"⚠ This mod targets YARG {result.ModTarget}; selected install is {installTag}. {abortVerb} aborted.";
                 return null;
-            case ApplyOutcome.Applied:
             default:
                 string version = result.Version ?? rel.Tag;
                 _config.InstalledVersion = version;
@@ -311,10 +319,14 @@ public sealed class MainViewModel : INotifyPropertyChanged
                 {
                     bool seamPresent = SeamPatcher.IsManagedDirPatched(_config.ManagedDir!);
                     UpdateStatus status = UpdateEvaluator.Evaluate(_config, latest, seamPresent);
-                    Status = status.ModUpdateAvailable
-                        ? $"Update available: {status.AvailableVersion}. Close YARG, then click Update."
-                        : status.Installed ? "BardQuest is up to date."
-                        : $"BardQuest {rel.Tag} is available — click Install.";
+                    if (status.ModUpdateAvailable)
+                    {
+                        Status = $"Update available: {status.AvailableVersion}. Close YARG, then click Update.";
+                    }
+                    else
+                    {
+                        Status = status.Installed ? "BardQuest is up to date." : $"BardQuest {rel.Tag} is available — click Install.";
+                    }
                 }
                 else
                 {
