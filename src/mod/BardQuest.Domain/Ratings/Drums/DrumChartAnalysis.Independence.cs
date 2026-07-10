@@ -33,65 +33,94 @@ public static partial class DrumChartAnalysis
         List<(double Time, HashSet<DrumRole> Roles)> groups = OnsetGroups(notes);
         List<CarrierSpan> spans = CarrierSpans(notes);
 
-        int offCarrier = 0, offCarrierFast = 0, residualAlt = 0, noCarrierAlt = 0;
-        HashSet<DrumRole>? prevResidual = null;
-        bool prevUnderCarrier = false, prevCymbalFree = false;
-        double prevTime = double.NegativeInfinity;
-
+        var state = new IndependenceState();
         foreach ((double time, HashSet<DrumRole> roles) in groups)
         {
-            CarrierSpan? carrier = Covering(spans, time);
-            var residual = new HashSet<DrumRole>(roles);
-            if (carrier != null)
-            {
-                _ = residual.Remove(carrier.Role);
-            }
-
-            // A figure limb striking BETWEEN carrier hits must subdivide on its own — true
-            // independence. Striking together with a carrier hit (unison) is not counted here.
-            if (carrier != null && residual.Count > 0 && !roles.Contains(carrier.Role))
-            {
-                offCarrier++;
-                if (carrier.MedianIoi <= FastCarrierIoi)
-                {
-                    offCarrierFast++;
-                }
-            }
-
-            bool cymbalFree = !roles.Contains(DrumRole.HiHat) && !roles.Contains(DrumRole.Cymbal);
-            if (time - prevTime <= CoordFastGap && prevResidual != null)
-            {
-                if (carrier != null && prevUnderCarrier)
-                {
-                    // Carrier-stripped alternation: {HH+K} -> {HH+S} is a real K->S interleave;
-                    // {HH} -> {HH+K} (a limb tapping along) strips to {} -> {K} and does not count.
-                    if (residual.Count > 0 && prevResidual.Count > 0 && !residual.SetEquals(prevResidual))
-                    {
-                        residualAlt++;
-                    }
-                }
-                else if (carrier == null && !prevUnderCarrier
-                    && cymbalFree && prevCymbalFree
-                    && roles.Count > 0 && prevResidual.Count > 0 && !roles.Overlaps(prevResidual))
-                {
-                    // Fast weaves among the non-timekeeping limbs (fills, solos). Requiring BOTH
-                    // groups cymbal-free keeps a plain beat that merely lacks a sustained ostinato
-                    // from re-admitting the backbeat false positive.
-                    noCarrierAlt++;
-                }
-            }
-
-            prevResidual = carrier == null ? roles : residual;
-            prevUnderCarrier = carrier != null;
-            prevCymbalFree = cymbalFree;
-            prevTime = time;
+            AccumulateGroup(time, roles, Covering(spans, time), state);
         }
 
         return new IndependenceRates(
-            OffCarrierPerSec: offCarrier / duration,
-            OffCarrierFastPerSec: offCarrierFast / duration,
-            ResidualAltPerSec: residualAlt / duration,
-            NoCarrierAltPerSec: noCarrierAlt / duration);
+            OffCarrierPerSec: state.OffCarrier / duration,
+            OffCarrierFastPerSec: state.OffCarrierFast / duration,
+            ResidualAltPerSec: state.ResidualAlt / duration,
+            NoCarrierAltPerSec: state.NoCarrierAlt / duration);
+    }
+
+    // Running counts + the previous onset group's state, threaded through one MeasureIndependence pass.
+    private sealed class IndependenceState
+    {
+        public int OffCarrier;
+        public int OffCarrierFast;
+        public int ResidualAlt;
+        public int NoCarrierAlt;
+        public HashSet<DrumRole>? PrevResidual;
+        public bool PrevUnderCarrier;
+        public bool PrevCymbalFree;
+        public double PrevTime = double.NegativeInfinity;
+    }
+
+    private static void AccumulateGroup(
+        double time, HashSet<DrumRole> roles, CarrierSpan? carrier, IndependenceState state)
+    {
+        var residual = new HashSet<DrumRole>(roles);
+        if (carrier != null)
+        {
+            _ = residual.Remove(carrier.Role);
+        }
+
+        CountOffCarrier(roles, carrier, residual, state);
+
+        bool cymbalFree = !roles.Contains(DrumRole.HiHat) && !roles.Contains(DrumRole.Cymbal);
+        if (time - state.PrevTime <= CoordFastGap && state.PrevResidual != null)
+        {
+            CountAlternation(roles, carrier, residual, cymbalFree, state);
+        }
+
+        state.PrevResidual = carrier == null ? roles : residual;
+        state.PrevUnderCarrier = carrier != null;
+        state.PrevCymbalFree = cymbalFree;
+        state.PrevTime = time;
+    }
+
+    // A figure limb striking BETWEEN carrier hits must subdivide on its own — true independence.
+    // Striking together with a carrier hit (unison) is not counted here.
+    private static void CountOffCarrier(
+        HashSet<DrumRole> roles, CarrierSpan? carrier, HashSet<DrumRole> residual, IndependenceState state)
+    {
+        if (carrier == null || residual.Count == 0 || roles.Contains(carrier.Role))
+        {
+            return;
+        }
+
+        state.OffCarrier++;
+        if (carrier.MedianIoi <= FastCarrierIoi)
+        {
+            state.OffCarrierFast++;
+        }
+    }
+
+    private static void CountAlternation(
+        HashSet<DrumRole> roles, CarrierSpan? carrier, HashSet<DrumRole> residual, bool cymbalFree,
+        IndependenceState state)
+    {
+        if (carrier != null && state.PrevUnderCarrier)
+        {
+            // Carrier-stripped alternation: {HH+K} -> {HH+S} is a real K->S interleave —
+            // {HH} -> {HH+K} (a limb tapping along) strips to {} -> {K} and does not count.
+            if (residual.Count > 0 && state.PrevResidual!.Count > 0 && !residual.SetEquals(state.PrevResidual))
+            {
+                state.ResidualAlt++;
+            }
+        }
+        else if (carrier == null && !state.PrevUnderCarrier
+            && cymbalFree && state.PrevCymbalFree
+            && roles.Count > 0 && state.PrevResidual!.Count > 0 && !roles.Overlaps(state.PrevResidual))
+        {
+            // Fast weaves among the non-timekeeping limbs (fills, solos). Requiring BOTH
+            // groups cymbal-free keeps a plain beat that merely lacks a sustained ostinato
+            // from re-admitting the backbeat false positive.
+            state.NoCarrierAlt++;
+        }
     }
 
     private sealed record CarrierSpan(double Start, double End, double MedianIoi, DrumRole Role);
@@ -102,41 +131,44 @@ public static partial class DrumChartAnalysis
         var spans = new List<CarrierSpan>();
         foreach (DrumRole role in (DrumRole[])[DrumRole.HiHat, DrumRole.Cymbal])
         {
-            var times = new List<double>();
-            foreach (RoleNote n in notes)
-            {
-                if (n.Role == role)
-                {
-                    times.Add(n.Time);
-                }
-            }
-
-            int start = 0;
-            for (int i = 1; i <= times.Count; i++)
-            {
-                if (i < times.Count && times[i] - times[i - 1] <= CarrierMaxIoi)
-                {
-                    continue;
-                }
-
-                if (i - start >= CarrierMinRun)
-                {
-                    var iois = new List<double>(i - start - 1);
-                    for (int j = start + 1; j < i; j++)
-                    {
-                        iois.Add(times[j] - times[j - 1]);
-                    }
-
-                    iois.Sort();
-                    spans.Add(new CarrierSpan(times[start], times[i - 1], iois[iois.Count / 2], role));
-                }
-
-                start = i;
-            }
+            List<double> times = [.. notes.Where(n => n.Role == role).Select(n => n.Time)];
+            spans.AddRange(CarrierRuns(times, role));
         }
 
         spans.Sort((a, b) => a.Start.CompareTo(b.Start));
         return spans;
+    }
+
+    // Consecutive onsets ≤ CarrierMaxIoi apart, in runs of at least CarrierMinRun, within one role's times.
+    private static IEnumerable<CarrierSpan> CarrierRuns(List<double> times, DrumRole role)
+    {
+        int start = 0;
+        for (int i = 1; i <= times.Count; i++)
+        {
+            if (i < times.Count && times[i] - times[i - 1] <= CarrierMaxIoi)
+            {
+                continue;
+            }
+
+            if (i - start >= CarrierMinRun)
+            {
+                yield return BuildSpan(times, start, i, role);
+            }
+
+            start = i;
+        }
+    }
+
+    private static CarrierSpan BuildSpan(List<double> times, int start, int end, DrumRole role)
+    {
+        var iois = new List<double>(end - start - 1);
+        for (int j = start + 1; j < end; j++)
+        {
+            iois.Add(times[j] - times[j - 1]);
+        }
+
+        iois.Sort();
+        return new CarrierSpan(times[start], times[end - 1], iois[iois.Count / 2], role);
     }
 
     // The span covering t; when hi-hat and ride ostinatos overlap, the faster one wins.

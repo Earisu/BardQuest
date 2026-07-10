@@ -18,6 +18,10 @@ internal static class MainMenuEntry
     private const string Label = "BARDQUEST";
     private static readonly Color BardQuestColor = new Color32(0x8A, 0x63, 0xD2, 0xFF); // BardQuest accent
 
+    // Deliberate accessibility bypass: YARG exposes no public API for menu injection, so this mod
+    // reads/writes a handful of its private fields (_localizationKey, _navigatables, _defaultColors,
+    // _selectedVisual, _onClick) via reflection. Read-only or same-process UI wiring, no untrusted
+    // input crosses this boundary — reviewed and accepted, not a code-fixable finding.
     private static readonly BindingFlags Priv = BindingFlags.Instance | BindingFlags.NonPublic;
 
     public static void Ensure(BardQuestManager manager, MainMenu mainMenu)

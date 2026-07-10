@@ -18,12 +18,16 @@ public static class AutoUpdateDecider
             return AutoUpdateAction.NeedsAttention;
         }
 
-        return !status.ModUpdateAvailable
-            ? AutoUpdateAction.None
-            : !compatible
-            ? AutoUpdateAction.NeedsAttention
-            : yargRunning
-            ? AutoUpdateAction.WaitForYargExit
-            : AutoUpdateAction.ApplyNow;
+        if (!status.ModUpdateAvailable)
+        {
+            return AutoUpdateAction.None;
+        }
+
+        if (!compatible)
+        {
+            return AutoUpdateAction.NeedsAttention;
+        }
+
+        return yargRunning ? AutoUpdateAction.WaitForYargExit : AutoUpdateAction.ApplyNow;
     }
 }

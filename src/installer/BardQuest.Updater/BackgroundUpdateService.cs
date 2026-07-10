@@ -15,6 +15,7 @@ public sealed class BackgroundUpdateService(string configPath, Action<string> se
 {
     private static readonly TimeSpan PollInterval = TimeSpan.FromHours(6);
     private static readonly TimeSpan YargExitWatchInterval = TimeSpan.FromSeconds(45);
+    private const string NeedsAttentionTooltip = "BardQuest — update needs attention (open the updater)";
 
     private readonly string _configPath = configPath;
     private readonly Action<string> _setTooltip = setTooltip;
@@ -34,6 +35,7 @@ public sealed class BackgroundUpdateService(string configPath, Action<string> se
     public void Stop()
     {
         _cts.Cancel();
+        _cts.Dispose();
         CleanupPending();
     }
 
@@ -116,7 +118,7 @@ public sealed class BackgroundUpdateService(string configPath, Action<string> se
                     StartYargExitWatch(managed, ct);
                     break;
                 case AutoUpdateAction.NeedsAttention:
-                    _setTooltip("BardQuest — update needs attention (open the updater)");
+                    _setTooltip(NeedsAttentionTooltip);
                     break;
                 case AutoUpdateAction.None:
                     _setTooltip(status.Installed
@@ -177,7 +179,7 @@ public sealed class BackgroundUpdateService(string configPath, Action<string> se
                 {
                     // Held download exists but is invalid/corrupt — discard so the next poll re-fetches.
                     CleanupPending();
-                    _setTooltip("BardQuest — update needs attention (open the updater)");
+                    _setTooltip(NeedsAttentionTooltip);
                 }
 
                 return;
@@ -198,12 +200,12 @@ public sealed class BackgroundUpdateService(string configPath, Action<string> se
                 }
                 else
                 {
-                    _setTooltip("BardQuest — update needs attention (open the updater)");
+                    _setTooltip(NeedsAttentionTooltip);
                 }
             }
             catch (Exception ex)
             {
-                _setTooltip("BardQuest — update needs attention (open the updater)");
+                _setTooltip(NeedsAttentionTooltip);
                 System.Diagnostics.Debug.WriteLine("BardQuest auto-apply: " + ex);
             }
         }

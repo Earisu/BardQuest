@@ -22,7 +22,7 @@ namespace BardQuest.Mod.Scan;
 // parses only-new charts on a background pool.
 // Instrument-agnostic: one LoadChart per song fans out to every registered analyzer.
 //
-// Two-YARG.Core bridge: the DOMAIN (ChartMetrics, analyzers) speaks the vendored YARG.Core enums;
+// Two-YARG.Core bridge: the DOMAIN (ChartMetrics, analyzers) speaks the vendored YARG.Core enums —
 // the RUNTIME (SongEntry/SongChart) speaks the yargpkg (YARG.Core.Package) enums. They are distinct
 // CLR types with identical byte values — convert at the boundary via ToRuntime/ToDomain below.
 public static class ScanService
@@ -97,12 +97,7 @@ public static class ScanService
     // rated for a later-added instrument.
     private static bool NeedsRating(SongEntry entry, Dictionary<string, List<ChartMetrics>> cache)
     {
-        if (!cache.TryGetValue(entry.Hash.ToString(), out List<ChartMetrics> ratings))
-        {
-            return true;
-        }
-
-        return (from a in Analyzers
+        return !cache.TryGetValue(entry.Hash.ToString(), out List<ChartMetrics> ratings) || (from a in Analyzers
             where entry.HasInstrument(ToRuntime(a.Instrument))
             select ratings.Any(r => r.Instrument == a.Instrument)).Any(has => !has);
     }

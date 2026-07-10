@@ -14,18 +14,16 @@ public sealed class BardQuestCanvas
     private static readonly Color32 Bg = new(0x14, 0x10, 0x22, 0xF2);   // BardQuest dark
     private static readonly Color32 Fg = new(0xE8, 0xE2, 0xF7, 0xFF);
 
-    private readonly GameObject _go;
     private readonly UIDocument _doc;
-    private NavigationScheme _scheme;
     private bool _visible;
 
     public BardQuestCanvas()
     {
-        _go = new GameObject("BardQuestCanvas");
-        UnityEngine.Object.DontDestroyOnLoad(_go);
+        var go = new GameObject("BardQuestCanvas");
+        UnityEngine.Object.DontDestroyOnLoad(go);
 
         PanelSettings panel = ScriptableObject.CreateInstance<PanelSettings>();
-        _doc = _go.AddComponent<UIDocument>();
+        _doc = go.AddComponent<UIDocument>();
         _doc.panelSettings = panel;
 
         VisualElement root = _doc.rootVisualElement;
@@ -66,11 +64,11 @@ public sealed class BardQuestCanvas
         }
 
         _doc.rootVisualElement.style.display = DisplayStyle.Flex;
-        _scheme = new NavigationScheme(
+        var scheme = new NavigationScheme(
         [
             new NavigationScheme.Entry(MenuAction.Red, "Menu.Common.Back", Hide),
         ], false);
-        Navigator.Instance.PushScheme(_scheme);
+        Navigator.Instance.PushScheme(scheme);
         _visible = true;
     }
 

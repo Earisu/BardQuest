@@ -26,6 +26,11 @@ public static class YargCompat
     {
         string? a = Normalize(modTarget);
         string? b = Normalize(installTag);
-        return a is null || b is null ? Compatibility.Unverified : a == b ? Compatibility.Compatible : Compatibility.Incompatible;
+        if (a is null || b is null)
+        {
+            return Compatibility.Unverified;
+        }
+
+        return a == b ? Compatibility.Compatible : Compatibility.Incompatible;
     }
 }
