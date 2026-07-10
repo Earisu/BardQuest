@@ -89,18 +89,8 @@ public static class ScanService
         }
     }
 
-    private static bool HasAnyAnalyzerInstrument(SongEntry entry)
-    {
-        foreach (IChartAnalyzer a in Analyzers)
-        {
-            if (entry.HasInstrument(ToRuntime(a.Instrument)))
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
+    private static bool HasAnyAnalyzerInstrument(SongEntry entry) =>
+        Analyzers.Any(a => entry.HasInstrument(ToRuntime(a.Instrument)));
 
     // A song needs (re)rating if any registered analyzer's instrument it has lacks a cached rating
     // for its hash. Keeps incrementality instrument-agnostic: a hash cached for drums still gets
@@ -112,30 +102,9 @@ public static class ScanService
             return true;
         }
 
-        foreach (IChartAnalyzer a in Analyzers)
-        {
-            if (!entry.HasInstrument(ToRuntime(a.Instrument)))
-            {
-                continue;
-            }
-
-            bool has = false;
-            foreach (ChartMetrics r in ratings)
-            {
-                if (r.Instrument == a.Instrument)
-                {
-                    has = true;
-                    break;
-                }
-            }
-
-            if (!has)
-            {
-                return true;
-            }
-        }
-
-        return false;
+        return (from a in Analyzers
+            where entry.HasInstrument(ToRuntime(a.Instrument))
+            select ratings.Any(r => r.Instrument == a.Instrument)).Any(has => !has);
     }
 
     private static void RunBuild(
