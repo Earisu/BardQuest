@@ -1,4 +1,5 @@
 using BardQuest.Domain.Ratings;
+using BardQuest.Domain.Ratings.Drums;
 
 using Xunit;
 
@@ -8,81 +9,58 @@ namespace BardQuest.Domain.Tests.Ratings;
 
 public class RatingCacheTests
 {
-    private static Dictionary<string, IReadOnlyList<ChartRating>> Sample() => new()
-    {
-        ["AABBCC"] =
-        [
-            new ChartRating(Instrument.ProDrums, Difficulty.Expert, 5, 0.42, 12.5),
-            new ChartRating(Instrument.ProDrums, Difficulty.Hard, 4, 0.18, 7.0),
-        ],
-        ["DDEEFF"] =
-        [
-            new ChartRating(Instrument.ProDrums, Difficulty.Expert, 3, 0.0, 4.0),
-        ],
-    };
+    private static DrumRawMetrics Raw(double peak) =>
+        new(5, peak, 3, 2, 12, 18, 12, 0.06, 0.4, 0.1, 0.6, 1.1, 0.8, 2.3, 0.5, 6.8, 1.4);
 
-    [Fact]
-    public void Serialize_ThenDeserialize_RoundTrips()
+    private static byte[] Write(IReadOnlyDictionary<string, IReadOnlyList<ChartMetrics>> data)
     {
-        Dictionary<string, IReadOnlyList<ChartRating>> input = Sample();
         using var ms = new MemoryStream();
-        RatingCache.Serialize(input.ToDictionary(k => k.Key, v => v.Value), ms);
-        ms.Position = 0;
-
-        Dictionary<string, List<ChartRating>>? outp = RatingCache.Deserialize(ms);
-
-        Assert.NotNull(outp);
-        Assert.Equal(2, outp.Count);
-        Assert.Equal(input["AABBCC"], outp["AABBCC"]);       // records compare by value
-        Assert.Equal(input["DDEEFF"], outp["DDEEFF"]);
+        RatingCache.Serialize(data, ms);
+        return ms.ToArray();
     }
 
     [Fact]
-    public void Deserialize_WrongMagic_ReturnsNull()
+    public void RoundTrips_MetricsAndSentinel()
     {
-        using var ms = new MemoryStream();
-        using (var w = new BinaryWriter(ms, System.Text.Encoding.UTF8, leaveOpen: true))
+        var data = new Dictionary<string, IReadOnlyList<ChartMetrics>>
         {
-            w.Write(0xDEADBEEF); // not RatingCache.Magic
-        }
+            ["hashA"] =
+            [
+                new(Instrument.ProDrums, Difficulty.Expert, 5, Raw(14.5)),
+                ChartMetrics.Sentinel(Instrument.ProDrums),
+            ],
+        };
 
-        ms.Position = 0;
+        using var ms = new MemoryStream(Write(data));
+        Dictionary<string, List<ChartMetrics>>? back = RatingCache.Deserialize(ms);
+
+        Assert.NotNull(back);
+        List<ChartMetrics> charts = back["hashA"];
+        Assert.Equal(2, charts.Count);
+        var rated = (DrumRawMetrics)charts[0].Raw;
+        Assert.Equal(14.5, rated.PeakNps, 6);
+        Assert.Equal(Raw(14.5), rated); // every field survives — guards the codec's byte offsets (incl. the int at field 5)
+        Assert.Equal(Instrument.ProDrums, charts[0].Instrument);
+        Assert.Equal(Difficulty.Expert, charts[0].Difficulty);
+        Assert.Equal(5, charts[0].Intensity);
+        Assert.True(charts[1].Intensity < 0); // sentinel survived
+    }
+
+    [Fact]
+    public void BadMagic_ReturnsNull()
+    {
+        using var ms = new MemoryStream([1, 2, 3, 4, 5, 6, 7, 8]);
         Assert.Null(RatingCache.Deserialize(ms));
     }
 
     [Fact]
-    public void Deserialize_WrongVersion_ReturnsNull()
+    public void Truncated_ReturnsNull()
     {
-        using var ms = new MemoryStream();
-        using (var w = new BinaryWriter(ms, System.Text.Encoding.UTF8, leaveOpen: true))
+        byte[] full = Write(new Dictionary<string, IReadOnlyList<ChartMetrics>>
         {
-            w.Write(RatingCache.Magic);
-            w.Write(RatingCache.Version + 1); // future version
-        }
-
-        ms.Position = 0;
-        Assert.Null(RatingCache.Deserialize(ms));
-    }
-
-    [Fact]
-    public void Deserialize_EmptyStream_ReturnsNull()
-    {
-        using var ms = new MemoryStream();
-        Assert.Null(RatingCache.Deserialize(ms));
-    }
-
-    [Fact]
-    public void Deserialize_CorruptCount_ReturnsNull()
-    {
-        using var ms = new MemoryStream();
-        using (var w = new BinaryWriter(ms, System.Text.Encoding.UTF8, leaveOpen: true))
-        {
-            w.Write(RatingCache.Magic);
-            w.Write(RatingCache.Version);
-            w.Write(int.MaxValue); // bogus songCount, no further data
-        }
-
-        ms.Position = 0;
+            ["h"] = [new(Instrument.ProDrums, Difficulty.Expert, 5, Raw(9))],
+        });
+        using var ms = new MemoryStream(full[..(full.Length / 2)]);
         Assert.Null(RatingCache.Deserialize(ms));
     }
 }

@@ -1,13 +1,15 @@
 extern alias yargpkg;
 
-using yargpkg::YARG.Core;              // Difficulty — the runtime/package build, matching the loaded chart
-using yargpkg::YARG.Core.Chart;        // SongChart, DrumNote, InstrumentTrack, FourLaneDrumPad
+using BardQuest.Domain.Ratings;               // SyncInfo, TimeSignatureSpan
+
+using yargpkg::YARG.Core;                      // Difficulty
+using yargpkg::YARG.Core.Chart;                // SongChart, DrumNote, InstrumentTrack, SyncTrack, TimeSignatureChange
 
 namespace BardQuest.Mod.Scan;
 
-// Maps YARG's loaded ProDrums chart (kick + colored drums + cymbals) to BardQuest's neutral
-// (time-seconds, lane-int) hit list, per charted difficulty. Lane = (int)FourLaneDrumPad, which
-// matches BardQuest.Domain.Ratings.DrumPad ordinals (locked by DrumPadTests).
+// Maps YARG's loaded ProDrums chart to BardQuest's neutral (time, lane, tick) note list per charted
+// difficulty, plus a neutral SyncInfo (resolution + time-signature spans) for rhythmic metrics.
+// Lane = (int)FourLaneDrumPad; DrumKitMap.ProFourLane interprets it.
 public static class DrumChartExtractor
 {
     private static readonly Difficulty[] Charted =
@@ -28,15 +30,27 @@ public static class DrumChartExtractor
         return list;
     }
 
-    public static IReadOnlyList<(double Time, int Lane)> Extract(
+    public static SyncInfo BuildSyncInfo(SongChart chart)
+    {
+        SyncTrack sync = chart.SyncTrack;
+        var spans = new List<TimeSignatureSpan>(sync.TimeSignatures.Count);
+        foreach (TimeSignatureChange ts in sync.TimeSignatures)
+        {
+            spans.Add(new TimeSignatureSpan(sync.TickToTime(ts.Tick), (int)ts.Numerator, (int)ts.Denominator));
+        }
+
+        return new SyncInfo(sync.Resolution, spans);
+    }
+
+    public static IReadOnlyList<(double Time, int Lane, uint Tick)> Extract(
         SongChart chart, Difficulty difficulty, out double durationSeconds)
     {
-        var hits = new List<(double Time, int Lane)>();
+        var notes = new List<(double Time, int Lane, uint Tick)>();
         InstrumentTrack<DrumNote> track = chart.ProDrums;
         if (!track.TryGetDifficulty(difficulty, out var diff) || diff == null)
         {
             durationSeconds = 0;
-            return hits;
+            return notes;
         }
 
         foreach (DrumNote parent in diff.Notes)
@@ -46,15 +60,15 @@ public static class DrumChartExtractor
                 int lane = n.Pad;
                 if (lane is < 0 or > 7)
                 {
-                    continue; // skip Wildcard (9) / anything outside our 0..7 vocabulary
+                    continue; // out of the ProFourLane vocabulary (Wildcard etc.)
                 }
 
-                hits.Add((n.Time, lane));
+                notes.Add((n.Time, lane, n.Tick));
             }
         }
 
-        hits.Sort((a, b) => a.Time.CompareTo(b.Time));
-        durationSeconds = hits.Count > 0 ? hits[^1].Time - hits[0].Time : 0;
-        return hits;
+        notes.Sort((a, b) => a.Time.CompareTo(b.Time));
+        durationSeconds = notes.Count > 0 ? notes[^1].Time - notes[0].Time : 0;
+        return notes;
     }
 }

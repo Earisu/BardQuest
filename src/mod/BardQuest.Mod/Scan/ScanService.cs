@@ -4,6 +4,7 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 
 using BardQuest.Domain.Ratings;
+using BardQuest.Domain.Ratings.Drums;
 
 using YARG.Song;                          // SongContainer (Assembly-CSharp)
 
@@ -21,7 +22,7 @@ namespace BardQuest.Mod.Scan;
 // parses only-new charts on a background pool.
 // Instrument-agnostic: one LoadChart per song fans out to every registered analyzer.
 //
-// Two-YARG.Core bridge: the DOMAIN (ChartRating, analyzers) speaks the vendored YARG.Core enums;
+// Two-YARG.Core bridge: the DOMAIN (ChartMetrics, analyzers) speaks the vendored YARG.Core enums;
 // the RUNTIME (SongEntry/SongChart) speaks the yargpkg (YARG.Core.Package) enums. They are distinct
 // CLR types with identical byte values — convert at the boundary via ToRuntime/ToDomain below.
 public static class ScanService
@@ -30,7 +31,8 @@ public static class ScanService
 
     // Registered analyzers (Phase 1: drums only). Adding an instrument = add its analyzer here
     // (and its extractor branch in RateEntry).
-    private static readonly IChartRatingAnalyzer[] Analyzers = [new DrumChartRatingAnalyzer()];
+    private static readonly IChartAnalyzer[] Analyzers =
+        [new DrumChartAnalyzer(YARG.Core.Instrument.ProDrums, DrumKitMap.ProFourLane)];
 
     private static int _running; // 0 = idle, 1 = a build is in flight (atomic guard)
 
@@ -53,7 +55,7 @@ public static class ScanService
             // Resolved here on Unity's main thread — RunBuild's background thread must never touch
             // Application.persistentDataPath (a main-thread-only Unity API) itself.
             string cachePath = RatingCacheFile.Path();
-            Dictionary<string, List<ChartRating>> cache = RatingCacheFile.Load();
+            Dictionary<string, List<ChartMetrics>> cache = RatingCacheFile.Load();
             var work = new List<SongEntry>();
             int relevant = 0;
 
@@ -89,7 +91,7 @@ public static class ScanService
 
     private static bool HasAnyAnalyzerInstrument(SongEntry entry)
     {
-        foreach (IChartRatingAnalyzer a in Analyzers)
+        foreach (IChartAnalyzer a in Analyzers)
         {
             if (entry.HasInstrument(ToRuntime(a.Instrument)))
             {
@@ -103,14 +105,14 @@ public static class ScanService
     // A song needs (re)rating if any registered analyzer's instrument it has lacks a cached rating
     // for its hash. Keeps incrementality instrument-agnostic: a hash cached for drums still gets
     // rated for a later-added instrument.
-    private static bool NeedsRating(SongEntry entry, Dictionary<string, List<ChartRating>> cache)
+    private static bool NeedsRating(SongEntry entry, Dictionary<string, List<ChartMetrics>> cache)
     {
-        if (!cache.TryGetValue(entry.Hash.ToString(), out List<ChartRating> ratings))
+        if (!cache.TryGetValue(entry.Hash.ToString(), out List<ChartMetrics> ratings))
         {
             return true;
         }
 
-        foreach (IChartRatingAnalyzer a in Analyzers)
+        foreach (IChartAnalyzer a in Analyzers)
         {
             if (!entry.HasInstrument(ToRuntime(a.Instrument)))
             {
@@ -118,7 +120,7 @@ public static class ScanService
             }
 
             bool has = false;
-            foreach (ChartRating r in ratings)
+            foreach (ChartMetrics r in ratings)
             {
                 if (r.Instrument == a.Instrument)
                 {
@@ -137,7 +139,7 @@ public static class ScanService
     }
 
     private static void RunBuild(
-        string cachePath, Dictionary<string, List<ChartRating>> cache, List<SongEntry> work, int relevant)
+        string cachePath, Dictionary<string, List<ChartMetrics>> cache, List<SongEntry> work, int relevant)
     {
         var thread = new Thread(() =>
         {
@@ -145,7 +147,7 @@ public static class ScanService
             {
                 var sw = Stopwatch.StartNew();
                 var queue = new BlockingCollection<SongEntry>();
-                var results = new ConcurrentDictionary<string, List<ChartRating>>();
+                var results = new ConcurrentDictionary<string, List<ChartMetrics>>();
                 int rated = 0;
                 int failed = 0;
 
@@ -158,7 +160,7 @@ public static class ScanService
                         {
                             try
                             {
-                                List<ChartRating> ratings = RateEntry(entry);
+                                List<ChartMetrics> ratings = RateEntry(entry);
                                 if (ratings.Count > 0)
                                 {
                                     results[entry.Hash.ToString()] = ratings;
@@ -187,13 +189,13 @@ public static class ScanService
                     w.Join();
                 }
 
-                foreach (KeyValuePair<string, List<ChartRating>> kv in results)
+                foreach (KeyValuePair<string, List<ChartMetrics>> kv in results)
                 {
                     cache[kv.Key] = kv.Value;
                 }
 
-                var toWrite = new Dictionary<string, IReadOnlyList<ChartRating>>(cache.Count);
-                foreach (KeyValuePair<string, List<ChartRating>> kv in cache)
+                var toWrite = new Dictionary<string, IReadOnlyList<ChartMetrics>>(cache.Count);
+                foreach (KeyValuePair<string, List<ChartMetrics>> kv in cache)
                 {
                     toWrite[kv.Key] = kv.Value;
                 }
@@ -217,12 +219,12 @@ public static class ScanService
         thread.Start();
     }
 
-    private static List<ChartRating> RateEntry(SongEntry entry)
+    private static List<ChartMetrics> RateEntry(SongEntry entry)
     {
-        var ratings = new List<ChartRating>();
+        var metrics = new List<ChartMetrics>();
         SongChart chart = entry.LoadChart();
 
-        foreach (IChartRatingAnalyzer analyzer in Analyzers)
+        foreach (IChartAnalyzer analyzer in Analyzers)
         {
             RtInstrument runtimeInstrument = ToRuntime(analyzer.Instrument);
             if (!entry.HasInstrument(runtimeInstrument))
@@ -234,21 +236,19 @@ public static class ScanService
 
             if (chart != null)
             {
-                int rawIntensity = Intensity(entry, runtimeInstrument);
+                int intensity = Intensity(entry, runtimeInstrument);
+                SyncInfo sync = DrumChartExtractor.BuildSyncInfo(chart);
 
-                // Phase 1: the only registered analyzer is drums, so the drum extractor applies.
-                // A future instrument pairs its own extractor with its analyzer here.
                 foreach (RtDifficulty diff in DrumChartExtractor.AvailableDifficulties(chart))
                 {
-                    IReadOnlyList<(double Time, int Lane)> hits =
+                    IReadOnlyList<(double Time, int Lane, uint Tick)> notes =
                         DrumChartExtractor.Extract(chart, diff, out double duration);
-                    if (hits.Count == 0)
+                    if (notes.Count == 0)
                     {
                         continue;
                     }
 
-                    // bpm is not currently wired up; raw intensity is the authoritative tier signal in Phase 1.
-                    ratings.Add(analyzer.Analyze(hits, duration, rawIntensity, bpm: 0, ToDomain(diff)));
+                    metrics.Add(analyzer.Analyze(notes, duration, intensity, ToDomain(diff), sync));
                     ratedAny = true;
                 }
             }
@@ -256,16 +256,15 @@ public static class ScanService
             if (!ratedAny)
             {
                 // Negative-cache marker: the song's metadata claims this instrument, but no rateable
-                // chart could be loaded/extracted. Tier < 0 flags "attempted, unrateable" so
-                // NeedsRating won't re-parse this hash every refresh — while a LATER-added analyzer
-                // instrument (absent from the cached list entirely) still triggers re-rating. The
-                // Difficulty field is irrelevant for a sentinel (NeedsRating matches on Instrument
-                // only); use Difficulty.Expert as a documented don't-care.
-                ratings.Add(new ChartRating(analyzer.Instrument, YARG.Core.Difficulty.Expert, -1, 0, 0));
+                // chart could be loaded/extracted. Sentinel.Intensity < 0 flags "attempted,
+                // unrateable" so NeedsRating won't re-parse this hash every refresh — while a
+                // LATER-added analyzer instrument (absent from the cached list entirely) still
+                // triggers re-rating.
+                metrics.Add(ChartMetrics.Sentinel(analyzer.Instrument));
             }
         }
 
-        return ratings;
+        return metrics;
     }
 
     // YARG's per-instrument star for this song (our Tier when >= 1). Confirm entry[instrument].Intensity
