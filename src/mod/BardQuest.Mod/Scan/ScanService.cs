@@ -141,82 +141,111 @@ public static class ScanService
     private static void RunBuild(
         string cachePath, Dictionary<string, List<ChartMetrics>> cache, List<SongEntry> work, int relevant)
     {
-        var thread = new Thread(() =>
+        var thread = new Thread(() => BuildAndSave(cachePath, cache, work, relevant))
+        { IsBackground = true, Name = "BardQuestRateBuild" };
+        thread.Start();
+    }
+
+    private static void BuildAndSave(
+        string cachePath, Dictionary<string, List<ChartMetrics>> cache, List<SongEntry> work, int relevant)
+    {
+        try
+        {
+            var sw = Stopwatch.StartNew();
+            (ConcurrentDictionary<string, List<ChartMetrics>> results, int rated, int failed) = RateInParallel(work);
+
+            foreach (KeyValuePair<string, List<ChartMetrics>> kv in results)
+            {
+                cache[kv.Key] = kv.Value;
+            }
+
+            SaveCache(cachePath, cache);
+            sw.Stop();
+            ModLog.Info(
+                $"Ratings built — {relevant} rated songs, {rated} new rated, {failed} failed, " +
+                $"in {sw.Elapsed.TotalSeconds:F1}s (workers={WorkerCount}).");
+        }
+        catch (Exception ex)
+        {
+            ModLog.Error("Rating build failed: " + ex);
+        }
+        finally
+        {
+            _ = Interlocked.Exchange(ref _running, 0);
+        }
+    }
+
+    // Fans work out to WorkerCount consumer threads draining a shared queue, then joins them all.
+    private static (ConcurrentDictionary<string, List<ChartMetrics>> Results, int Rated, int Failed) RateInParallel(
+        List<SongEntry> work)
+    {
+        var queue = new BlockingCollection<SongEntry>();
+        var results = new ConcurrentDictionary<string, List<ChartMetrics>>();
+        var counts = new RateCounts();
+
+        var workers = new Thread[WorkerCount];
+        for (int i = 0; i < WorkerCount; i++)
+        {
+            workers[i] = new Thread(() => DrainQueue(queue, results, counts))
+            { IsBackground = true, Name = "BardQuestRate" };
+            workers[i].Start();
+        }
+
+        foreach (SongEntry entry in work)
+        {
+            queue.Add(entry);
+        }
+
+        queue.CompleteAdding();
+        foreach (Thread w in workers)
+        {
+            w.Join();
+        }
+
+        return (results, counts.Rated, counts.Failed);
+    }
+
+    // One worker's loop body: rate entries until the queue is drained, tallying successes/failures.
+    private static void DrainQueue(
+        BlockingCollection<SongEntry> queue,
+        ConcurrentDictionary<string, List<ChartMetrics>> results,
+        RateCounts counts)
+    {
+        foreach (SongEntry entry in queue.GetConsumingEnumerable())
         {
             try
             {
-                var sw = Stopwatch.StartNew();
-                var queue = new BlockingCollection<SongEntry>();
-                var results = new ConcurrentDictionary<string, List<ChartMetrics>>();
-                int rated = 0;
-                int failed = 0;
-
-                var workers = new Thread[WorkerCount];
-                for (int i = 0; i < WorkerCount; i++)
+                List<ChartMetrics> ratings = RateEntry(entry);
+                if (ratings.Count > 0)
                 {
-                    workers[i] = new Thread(() =>
-                    {
-                        foreach (SongEntry entry in queue.GetConsumingEnumerable())
-                        {
-                            try
-                            {
-                                List<ChartMetrics> ratings = RateEntry(entry);
-                                if (ratings.Count > 0)
-                                {
-                                    results[entry.Hash.ToString()] = ratings;
-                                    _ = Interlocked.Increment(ref rated);
-                                }
-                            }
-                            catch (Exception ex)
-                            {
-                                _ = Interlocked.Increment(ref failed);
-                                Debug.LogWarning($"[BardQuest] rate failed for {entry.Name}: {ex.Message}");
-                            }
-                        }
-                    })
-                    { IsBackground = true, Name = "BardQuestRate" };
-                    workers[i].Start();
+                    results[entry.Hash.ToString()] = ratings;
+                    _ = Interlocked.Increment(ref counts.Rated);
                 }
-
-                foreach (SongEntry entry in work)
-                {
-                    queue.Add(entry);
-                }
-
-                queue.CompleteAdding();
-                foreach (Thread w in workers)
-                {
-                    w.Join();
-                }
-
-                foreach (KeyValuePair<string, List<ChartMetrics>> kv in results)
-                {
-                    cache[kv.Key] = kv.Value;
-                }
-
-                var toWrite = new Dictionary<string, IReadOnlyList<ChartMetrics>>(cache.Count);
-                foreach (KeyValuePair<string, List<ChartMetrics>> kv in cache)
-                {
-                    toWrite[kv.Key] = kv.Value;
-                }
-
-                RatingCacheFile.Save(cachePath, toWrite);
-                sw.Stop();
-                ModLog.Info(
-                    $"Ratings built — {relevant} rated songs, {rated} new rated, {failed} failed, " +
-                    $"in {sw.Elapsed.TotalSeconds:F1}s (workers={WorkerCount}).");
             }
             catch (Exception ex)
             {
-                ModLog.Error("Rating build failed: " + ex);
+                _ = Interlocked.Increment(ref counts.Failed);
+                Debug.LogWarning($"[BardQuest] rate failed for {entry.Name}: {ex.Message}");
             }
-            finally
-            {
-                _ = Interlocked.Exchange(ref _running, 0);
-            }
-        })
-        { IsBackground = true, Name = "BardQuestRateBuild" };
-        thread.Start();
+        }
+    }
+
+    private static void SaveCache(string cachePath, Dictionary<string, List<ChartMetrics>> cache)
+    {
+        var toWrite = new Dictionary<string, IReadOnlyList<ChartMetrics>>(cache.Count);
+        foreach (KeyValuePair<string, List<ChartMetrics>> kv in cache)
+        {
+            toWrite[kv.Key] = kv.Value;
+        }
+
+        RatingCacheFile.Save(cachePath, toWrite);
+    }
+
+    // Mutable, heap-allocated so Interlocked can take a ref to a field shared across worker threads.
+    private sealed class RateCounts
+    {
+        public int Rated;
+        public int Failed;
     }
 
     private static List<ChartMetrics> RateEntry(SongEntry entry)
