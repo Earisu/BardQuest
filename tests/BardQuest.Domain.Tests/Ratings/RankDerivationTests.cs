@@ -6,20 +6,19 @@ namespace BardQuest.Domain.Tests.Ratings;
 
 public class RankDerivationTests
 {
-    // Five axes drive the rank: Strength/Endurance/Technique/Agility/Dexterity. Precision defaults to 0
-    // and is ignored. Bands: F<11 E<18 D<24 C<29 B<34 A<38 S<43 SS<47, else SSS (score = five-axis sum).
-    private static AttributeProfile Of(double str, double end, double tec, double agi, double pre = 0, double dex = 0)
+    // Five axes drive the rank: Strength/Endurance/Technique/Agility/Dexterity.
+    // Bands: F<11 E<18 D<24 C<29 B<34 A<38 S<43 SS<47, else SSS (score = five-axis sum).
+    private static AttributeProfile Of(double str, double end, double tec, double agi, double dex = 0)
         => new(new Dictionary<Attribute, double>
         {
             [Attribute.Strength] = str,
             [Attribute.Endurance] = end,
             [Attribute.Technique] = tec,
             [Attribute.Agility] = agi,
-            [Attribute.Precision] = pre,
             [Attribute.Dexterity] = dex,
         });
 
-    // All five rank axes equal to v (Precision left at 0).
+    // All five rank axes equal to v.
     private static AttributeProfile Flat(double v) => Of(v, v, v, v, dex: v);
 
     [Fact]
@@ -54,15 +53,6 @@ public class RankDerivationTests
         => Assert.Equal(
             RankDerivation.Derive(Flat(6), patternVariety: RankDerivation.VarietyCeil),
             RankDerivation.Derive(Flat(6), patternVariety: 5.0));
-
-    [Fact]
-    public void RankIgnoresPrecision()
-    {
-        // Same rank axes, wildly different Precision -> identical rank (Precision is descriptive-only).
-        Rank bare = RankDerivation.Derive(Of(5, 5, 5, 5, pre: 0, dex: 5));
-        Rank loaded = RankDerivation.Derive(Of(5, 5, 5, 5, pre: 10, dex: 5));
-        Assert.Equal(bare, loaded);
-    }
 
     [Fact]
     public void RankUsesDexterity()

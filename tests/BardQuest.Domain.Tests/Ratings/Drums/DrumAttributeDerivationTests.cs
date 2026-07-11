@@ -97,22 +97,6 @@ public class DrumAttributeDerivationTests
     }
 
     [Fact]
-    public void Precision_IsWorseOfSyncopationOrOddMeter()
-    {
-        // Timing-exactness = the worse of syncopation load or odd-meter load (a MAX). Either alone
-        // can drive it high.
-        double syncOnly = DrumAttributeDerivation.Derive(Raw(sync: 0.40))[Attribute.Precision];
-        double oddOnly = DrumAttributeDerivation.Derive(Raw(odd: 0.50))[Attribute.Precision];
-        Assert.Equal(10.0, syncOnly, 6);   // sync at its ceiling alone maxes Precision
-        Assert.Equal(10.0, oddOnly, 6);    // odd meter at its ceiling alone maxes Precision
-
-        // The max picks the stronger signal: a modestly syncopated chart reads by whichever is worse.
-        double mildSync = DrumAttributeDerivation.Derive(Raw(sync: 0.20))[Attribute.Precision];
-        double mildSyncBigOdd = DrumAttributeDerivation.Derive(Raw(sync: 0.20, odd: 0.40))[Attribute.Precision];
-        Assert.True(mildSyncBigOdd > mildSync);
-    }
-
-    [Fact]
     public void Dexterity_IsKitBreadthGatedByNonRepetition()
     {
         // Kit-ranging = breadth (KitPieceEntropy) AND non-repetition (PatternVariety). At equal variety,
