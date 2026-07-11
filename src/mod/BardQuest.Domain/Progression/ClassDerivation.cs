@@ -1,7 +1,8 @@
 namespace BardQuest.Domain.Progression;
 
-/// <summary>Buckets a player's five attribute levels (summed, 0–50 — the SAME axis RankDerivation
-/// scores charts on) into a (class, subrank). A sibling of RankDerivation, not a call into it: shared
+/// <summary>Buckets a player's five attribute levels (summed, 0–50 — the SAME axis a chart's rank
+/// scores on, see <see cref="Ratings.AttributeProfile.ToRank"/>) into a (class, subrank). A sibling of
+/// that chart-rank banding, not a call into it: shared
 /// axis, own 18-band prestige-weighted banding (tighter toward the top so Legendweaver stays rare),
 /// none of the chart-only boss/variety logic. Band edges are CALIBRATION TARGETS.</summary>
 public static class ClassDerivation
