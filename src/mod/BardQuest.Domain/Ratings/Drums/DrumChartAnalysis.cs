@@ -172,39 +172,6 @@ public static partial class DrumChartAnalysis
         return gaps.Count == 0 ? 0.0 : NoteDensity.Percentile(gaps, TransitionGapPercentile);
     }
 
-    // --- Precision ---
-    public const double SyncTolerance = 0.05; // phase distance from a strong beat to still count "on"
-
-    private static double BeatPhase(uint tick, uint resolution) => tick % resolution / (double)resolution;
-
-    internal static double SyncopationFraction(IReadOnlyList<RoleNote> notes, uint resolution)
-    {
-        if (resolution == 0 || notes.Count == 0)
-        {
-            return 0.0;
-        }
-
-        int off = 0;
-        foreach (RoleNote n in notes)
-        {
-            double phase = BeatPhase(n.Tick, resolution);
-            double dStrong = Math.Min(PhaseDist(phase, 0.0), PhaseDist(phase, 0.5));
-            if (dStrong > SyncTolerance)
-            {
-                off++;
-            }
-        }
-
-        return off / (double)notes.Count;
-    }
-
-    // circular distance between two phases in [0,1)
-    private static double PhaseDist(double a, double b)
-    {
-        double d = Math.Abs(a - b);
-        return Math.Min(d, 1.0 - d);
-    }
-
     // --- Dexterity ---
 
     // How much the chart CHANGES vs loops, as distinct bar-patterns / total bars. Each bar is
@@ -312,8 +279,6 @@ public static partial class DrumChartAnalysis
             PeakBurstNps: PeakBurstNps(notes),
             FastFillRate: FastFillRate(notes),
             ShortestTransitionGap: ShortestTransitionGap(notes),
-            SyncopationFraction: SyncopationFraction(notes, sync.Resolution),
-            OddMeterFraction: sync.OddMeterFraction(durationSeconds),
             PatternVariety: PatternVariety(notes, sync),
             OffCarrierPerSec: ind.OffCarrierPerSec,
             OffCarrierFastPerSec: ind.OffCarrierFastPerSec,

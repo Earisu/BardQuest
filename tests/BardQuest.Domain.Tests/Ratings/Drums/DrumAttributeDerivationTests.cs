@@ -9,10 +9,10 @@ public class DrumAttributeDerivationTests
 {
     private static DrumRawMetrics Raw(
         double avg = 0, double peak = 0, double dense = 0, double kickDen = 0, int kickRun = 0,
-        double burst = 0, double fill = 0, double gap = 1, double sync = 0, double odd = 0,
+        double burst = 0, double fill = 0, double gap = 1,
         double variety = 0, double offCarrier = 0, double offCarrierFast = 0,
         double residualAlt = 0, double noCarrierAlt = 0, double kickSpan = 0, double kitEntropy = 0)
-        => new(avg, peak, dense, kickDen, kickRun, burst, fill, gap, sync, odd, variety,
+        => new(avg, peak, dense, kickDen, kickRun, burst, fill, gap, variety,
             offCarrier, offCarrierFast, residualAlt, noCarrierAlt, kickSpan, kitEntropy);
 
     [Fact]
@@ -30,7 +30,7 @@ public class DrumAttributeDerivationTests
     {
         AttributeProfile p = DrumAttributeDerivation.Derive(Raw(
             avg: 99, peak: 99, dense: 99, kickDen: 99, kickRun: 999,
-            burst: 99, fill: 99, gap: 0, sync: 1, odd: 1,
+            burst: 99, fill: 99, gap: 0,
             variety: 1, offCarrier: 99, offCarrierFast: 99, residualAlt: 99, noCarrierAlt: 99, kickSpan: 99, kitEntropy: 99));
         foreach (Attribute a in Enum.GetValues<Attribute>())
         {

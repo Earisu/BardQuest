@@ -117,8 +117,6 @@ public static class RatingCache
         w.Write(m.PeakBurstNps);
         w.Write(m.FastFillRate);
         w.Write(m.ShortestTransitionGap);
-        w.Write(m.SyncopationFraction);
-        w.Write(m.OddMeterFraction);
         w.Write(m.PatternVariety);
         w.Write(m.OffCarrierPerSec);
         w.Write(m.OffCarrierFastPerSec);
@@ -132,5 +130,5 @@ public static class RatingCache
         => new(
             r.ReadDouble(), r.ReadDouble(), r.ReadDouble(), r.ReadDouble(), r.ReadInt32(), r.ReadDouble(),
             r.ReadDouble(), r.ReadDouble(), r.ReadDouble(), r.ReadDouble(), r.ReadDouble(), r.ReadDouble(),
-            r.ReadDouble(), r.ReadDouble(), r.ReadDouble(), r.ReadDouble(), r.ReadDouble());
+            r.ReadDouble(), r.ReadDouble(), r.ReadDouble());
 }
