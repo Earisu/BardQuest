@@ -15,10 +15,7 @@ public static class NoteDensity
         => sortedTimes.Count < 2 ? 0.0 : Percentile(WindowedRates(sortedTimes, PeakWindowSeconds), PeakPercentile);
 
     /// <summary>Maximum windowed notes/sec for an arbitrary window — the raw burst rate.</summary>
-    public static double PeakWindowNps(IReadOnlyList<double> sortedTimes, double windowSeconds)
-    {
-        return sortedTimes.Count < 2 || windowSeconds <= 0 ? 0.0 : WindowedRates(sortedTimes, windowSeconds).Max();
-    }
+    public static double PeakWindowNps(IReadOnlyList<double> sortedTimes, double windowSeconds) => sortedTimes.Count < 2 || windowSeconds <= 0 ? 0.0 : WindowedRates(sortedTimes, windowSeconds).Max();
 
     /// <summary>Nearest-rank percentile (does not mutate input).</summary>
     public static double Percentile(IReadOnlyList<double> values, double p)
