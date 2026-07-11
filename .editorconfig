@@ -83,8 +83,14 @@ dotnet_style_operator_placement_when_wrapping = beginning_of_line
 dotnet_style_prefer_auto_properties = true:warning
 dotnet_style_prefer_collection_expression = when_types_loosely_match:warning
 dotnet_style_prefer_compound_assignment = true:warning
-dotnet_style_prefer_conditional_expression_over_assignment = true:warning
-dotnet_style_prefer_conditional_expression_over_return = true:warning
+# IDE0045/IDE0046: disabled (`:none`), like namespace_match_folder above. `dotnet format style`
+# auto-collapses `if/return` chains into conditional expressions — and when the result is a NESTED
+# ternary it directly fights SonarQube S3358 ("no nested ternaries"), so the two tools oscillate and the
+# collapse has to be reverted on every format run (see AttributeXpFormula.GapPenalty); it has also once
+# produced a non-compiling fall-through switch. `dotnet format style` applies this fixer even at
+# `suggestion` severity, so only `:none` actually stops it. Sonar + review cover readability here.
+dotnet_style_prefer_conditional_expression_over_assignment = true:none
+dotnet_style_prefer_conditional_expression_over_return = true:none
 dotnet_style_prefer_foreach_explicit_cast_in_source = when_strongly_typed:warning
 dotnet_style_prefer_inferred_anonymous_type_member_names = true:warning
 dotnet_style_prefer_inferred_tuple_names = true:warning
@@ -431,6 +437,14 @@ dotnet_diagnostic.CA1873.severity = none
 # enumerating them — so these rules fight the design. Suppressed rather than fixed on sight each time.
 dotnet_diagnostic.IDE0010.severity = none
 dotnet_diagnostic.IDE0072.severity = none
+
+# CA2263 "Prefer generic overload when type is known": its codefix rewrites
+# `Enum.GetValues(typeof(X))` -> `Enum.GetValues<X>()`. The generic overload was added in .NET 5 and
+# does NOT exist on netstandard2.1, which BardQuest.Domain multi-targets — so `dotnet format analyzers`
+# applying this fix breaks the ns2.1 build with CS0308, while `dotnet test` (net10.0 only) still passes
+# and hides it. The non-generic form is REQUIRED for the shared TFM; this is a correctness constraint,
+# not a style preference. Suppressed rather than reverted on sight each time.
+dotnet_diagnostic.CA2263.severity = none
 
 #########################################################
 # Test projects — relax conventions that are idiomatic in tests
