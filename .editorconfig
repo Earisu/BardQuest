@@ -422,6 +422,16 @@ dotnet_analyzer_diagnostic.category-Usage.severity = warning
 dotnet_diagnostic.CA1848.severity = none
 dotnet_diagnostic.CA1873.severity = none
 
+# IDE0010/IDE0072 "Populate switch" (statement/expression): their codefix has repeatedly corrupted
+# switches during `dotnet format` — on a switch statement it added silent no-op `case: break;` arms
+# in front of an intended `default: throw`, and on switch expressions it injected
+# `throw new NotImplementedException()` arms that broke an intended catch-all default (e.g.
+# LevelCurve.ForPace, RatingCache.ReadRaw). Deliberately incomplete switches (RatingCache's
+# instrument dispatch, pace mapping) rely on that default/`_` arm catching new cases, not
+# enumerating them — so these rules fight the design. Suppressed rather than fixed on sight each time.
+dotnet_diagnostic.IDE0010.severity = none
+dotnet_diagnostic.IDE0072.severity = none
+
 #########################################################
 # Test projects — relax conventions that are idiomatic in tests
 #########################################################

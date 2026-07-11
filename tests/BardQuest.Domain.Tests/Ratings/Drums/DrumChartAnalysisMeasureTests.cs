@@ -31,7 +31,6 @@ public class DrumChartAnalysisMeasureTests
         Assert.True(m.AvgNps > 0);
         Assert.True(m.KickDensity > 0);
         Assert.True(m.PeakBurstNps > 0);
-        Assert.Equal(0.0, m.OddMeterFraction, 6); // all 4/4
     }
 
     [Fact]

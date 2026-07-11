@@ -10,7 +10,7 @@ namespace BardQuest.Domain.Tests.Ratings;
 public class RatingCacheTests
 {
     private static DrumRawMetrics Raw(double peak) =>
-        new(5, peak, 3, 2, 12, 18, 12, 0.06, 0.4, 0.1, 0.6, 1.1, 0.8, 2.3, 0.5, 6.8, 1.4);
+        new(5, peak, 3, 2, 12, 18, 12, 0.06, 0.6, 1.1, 0.8, 2.3, 0.5, 6.8, 1.4);
 
     private static byte[] Write(IReadOnlyDictionary<string, IReadOnlyList<ChartMetrics>> data)
     {

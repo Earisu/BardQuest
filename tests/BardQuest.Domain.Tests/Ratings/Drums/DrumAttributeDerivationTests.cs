@@ -9,10 +9,10 @@ public class DrumAttributeDerivationTests
 {
     private static DrumRawMetrics Raw(
         double avg = 0, double peak = 0, double dense = 0, double kickDen = 0, int kickRun = 0,
-        double burst = 0, double fill = 0, double gap = 1, double sync = 0, double odd = 0,
+        double burst = 0, double fill = 0, double gap = 1,
         double variety = 0, double offCarrier = 0, double offCarrierFast = 0,
         double residualAlt = 0, double noCarrierAlt = 0, double kickSpan = 0, double kitEntropy = 0)
-        => new(avg, peak, dense, kickDen, kickRun, burst, fill, gap, sync, odd, variety,
+        => new(avg, peak, dense, kickDen, kickRun, burst, fill, gap, variety,
             offCarrier, offCarrierFast, residualAlt, noCarrierAlt, kickSpan, kitEntropy);
 
     [Fact]
@@ -30,7 +30,7 @@ public class DrumAttributeDerivationTests
     {
         AttributeProfile p = DrumAttributeDerivation.Derive(Raw(
             avg: 99, peak: 99, dense: 99, kickDen: 99, kickRun: 999,
-            burst: 99, fill: 99, gap: 0, sync: 1, odd: 1,
+            burst: 99, fill: 99, gap: 0,
             variety: 1, offCarrier: 99, offCarrierFast: 99, residualAlt: 99, noCarrierAlt: 99, kickSpan: 99, kitEntropy: 99));
         foreach (Attribute a in Enum.GetValues<Attribute>())
         {
@@ -94,22 +94,6 @@ public class DrumAttributeDerivationTests
         double fast = DrumAttributeDerivation.Derive(Raw(offCarrier: 1.0, offCarrierFast: 1.0))[Attribute.Technique];
         Assert.True(slow > 0);
         Assert.True(fast > slow);
-    }
-
-    [Fact]
-    public void Precision_IsWorseOfSyncopationOrOddMeter()
-    {
-        // Timing-exactness = the worse of syncopation load or odd-meter load (a MAX). Either alone
-        // can drive it high.
-        double syncOnly = DrumAttributeDerivation.Derive(Raw(sync: 0.40))[Attribute.Precision];
-        double oddOnly = DrumAttributeDerivation.Derive(Raw(odd: 0.50))[Attribute.Precision];
-        Assert.Equal(10.0, syncOnly, 6);   // sync at its ceiling alone maxes Precision
-        Assert.Equal(10.0, oddOnly, 6);    // odd meter at its ceiling alone maxes Precision
-
-        // The max picks the stronger signal: a modestly syncopated chart reads by whichever is worse.
-        double mildSync = DrumAttributeDerivation.Derive(Raw(sync: 0.20))[Attribute.Precision];
-        double mildSyncBigOdd = DrumAttributeDerivation.Derive(Raw(sync: 0.20, odd: 0.40))[Attribute.Precision];
-        Assert.True(mildSyncBigOdd > mildSync);
     }
 
     [Fact]

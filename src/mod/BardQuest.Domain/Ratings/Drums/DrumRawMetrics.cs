@@ -13,8 +13,6 @@ public sealed record DrumRawMetrics(
     double PeakBurstNps,
     double FastFillRate,
     double ShortestTransitionGap,
-    double SyncopationFraction,
-    double OddMeterFraction,
     double PatternVariety,
     double OffCarrierPerSec,
     double OffCarrierFastPerSec,
@@ -24,5 +22,5 @@ public sealed record DrumRawMetrics(
     double KitPieceEntropy) : IRawMetrics
 {
     public static DrumRawMetrics Zero { get; } =
-        new(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+        new(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
 }

@@ -1,6 +1,6 @@
 namespace BardQuest.Domain.Ratings.Drums;
 
-/// <summary>Derives the six 0–10 attribute scores from <see cref="DrumRawMetrics"/>. Runs on load,
+/// <summary>Derives the five 0–10 attribute scores from <see cref="DrumRawMetrics"/>. Runs on load,
 /// never cached — every constant here is a first-pass CALIBRATION TARGET, tuned by playtest without
 /// rescanning. Family-specific: guitar/bass get their own derivation of the same attributes.</summary>
 public static class DrumAttributeDerivation
@@ -25,17 +25,6 @@ public static class DrumAttributeDerivation
     public const double IndependenceCeil = 2.0;   // events/sec at which Technique saturates
     public const double OffCarrierSlowWeight = 0.6;
 
-    // Precision = timing-exactness: how much the chart punishes loose timing. Two raw signals carry it:
-    // SyncopationFraction (notes off the strong beats — you can't coast on the pulse) and OddMeterFraction
-    // (the pulse itself shifts — you must count). Both already cached, so this axis retunes without a rescan.
-    // Combined as a MAX: a chart's timing demand is the worse of its syncopation load or its odd-meter load,
-    // so a purely odd-time groove and a purely syncopated funk groove both read high without needing both.
-    // Ceilings sit at the library's ~p97 so genuine timing monsters reach 10 and four-on-the-floor rock
-    // reads near 0. (Dropped the old third term, SubdivisionMixIndex: a presence-count that sat at ~0.8 for
-    // every chart, easy to brutal, pinning Precision into a compressed 2–6 band and averaging away the signal.)
-    public const double SyncopationCeil = 0.40;
-    public const double OddMeterCeil = 0.50;
-
     // Dexterity = kit-ranging: breadth of coverage GATED BY non-repetition. KitPieceEntropy (bits across
     // distinct pieces) says "how many pieces", but a repetitive multi-piece groove touches many pieces
     // without ranging — a White-Stripes floor-tom loop reads mid on entropy alone. PatternVariety
@@ -55,7 +44,6 @@ public static class DrumAttributeDerivation
             + (OffCarrierSlowWeight * (r.OffCarrierPerSec - r.OffCarrierFastPerSec));
         double technique = 10 * Math.Sqrt(Norm(independenceEvents, IndependenceCeil));
         double agility = 10 * Avg(Norm(r.PeakBurstNps, BurstCeil), Norm(r.FastFillRate, FastFillCeil), InvGap(r.ShortestTransitionGap));
-        double precision = 10 * Math.Max(Norm(r.SyncopationFraction, SyncopationCeil), Norm(r.OddMeterFraction, OddMeterCeil));
         double kitRanging = r.KitPieceEntropy * Math.Min(r.PatternVariety / DexVarietySat, 1.0);
         double dexterity = 10 * Norm(kitRanging, KitBreadthCeil);
 
@@ -65,7 +53,6 @@ public static class DrumAttributeDerivation
             [Attribute.Endurance] = endurance,
             [Attribute.Technique] = technique,
             [Attribute.Agility] = agility,
-            [Attribute.Precision] = precision,
             [Attribute.Dexterity] = dexterity,
         });
     }
