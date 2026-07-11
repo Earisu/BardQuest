@@ -1,6 +1,6 @@
 namespace BardQuest.Domain.Ratings;
 
-/// <summary>A chart's six attribute scores (each in [0,10]). Descriptive — never summed into a
+/// <summary>A chart's five attribute scores (each in [0,10]). Descriptive — never summed into a
 /// difficulty by consumers; the overall <see cref="Rank"/> is derived from it by
 /// <see cref="RankDerivation"/>. A missing attribute reads 0.</summary>
 public sealed class AttributeProfile(IReadOnlyDictionary<Attribute, double> scores)
@@ -9,7 +9,7 @@ public sealed class AttributeProfile(IReadOnlyDictionary<Attribute, double> scor
 
     public double this[Attribute a] => Scores.TryGetValue(a, out double v) ? v : 0.0;
 
-    /// <summary>Unweighted sum of all six axes (0..60).</summary>
+    /// <summary>Unweighted sum of all five axes (0..50).</summary>
     public double Sum()
     {
         double total = 0;

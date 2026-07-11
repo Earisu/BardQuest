@@ -1,8 +1,7 @@
 namespace BardQuest.Domain.Ratings;
 
-/// <summary>Buckets a chart into a <see cref="Rank"/> from FIVE attributes — Strength, Endurance,
-/// Technique, Agility and Dexterity — the axes that track drum difficulty. Precision is descriptive-
-/// only (weak difficulty signal) and deliberately excluded from the rank. The rank score is simply their
+/// <summary>Buckets a chart into a <see cref="Rank"/> from the five attributes — Strength, Endurance,
+/// Technique, Agility and Dexterity — the axes that track drum difficulty. The rank score is simply their
 /// sum (0..50, so all-tens = 50 = SSS), plus a gentle pattern-variety bonus, bucketed by
 /// prestige-weighted bands that tighten toward the top. A "boss" chart — one that maxes a single rank
 /// axis (>= <see cref="BossAttributeThreshold"/>) while already ranking B or higher — is promoted one
@@ -10,8 +9,8 @@ namespace BardQuest.Domain.Ratings;
 /// calibration targets.</summary>
 public static class RankDerivation
 {
-    // The axes that drive the rank. Precision is excluded — descriptive-only (see summary). Dexterity
-    // earns its place: recalibrated to kit-ranging, it separates easy from hard about as well as Agility.
+    // The five axes that drive the rank. Dexterity earns its place: recalibrated to kit-ranging, it
+    // separates easy from hard about as well as Agility.
     private static readonly Attribute[] RankAxes =
         [Attribute.Strength, Attribute.Endurance, Attribute.Technique, Attribute.Agility, Attribute.Dexterity];
 
