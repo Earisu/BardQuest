@@ -68,7 +68,7 @@ public static class QuestEngine
             }
 
             bool defeated = bestPercent.TryGetValue(hash, out double p) && p + 1e-9 >= miniBar;
-            monsters.Add(new MonsterStatus(hash, profile, profile.Sum(), defeated, IsMiniBoss: false, IsBoss: false));
+            monsters.Add(new MonsterStatus(hash, profile, profile.Sum(), defeated, MonsterType.Regular));
         }
 
         // Highlight the hardest in-set monster as the mini-boss (the concrete same-rank target).
@@ -83,7 +83,7 @@ public static class QuestEngine
                 }
             }
 
-            monsters[top] = monsters[top] with { IsMiniBoss = true };
+            monsters[top] = monsters[top] with { Type = MonsterType.Elite };
         }
 
         return monsters;
@@ -104,6 +104,6 @@ public static class QuestEngine
         }
 
         bool defeated = bestPercent.TryGetValue(bossHash, out double p) && p + 1e-9 >= AttributeXpFormula.ClearThreshold;
-        return new MonsterStatus(bossHash, profile, profile.Sum(), defeated, IsMiniBoss: false, IsBoss: true);
+        return new MonsterStatus(bossHash, profile, profile.Sum(), defeated, MonsterType.Boss);
     }
 }

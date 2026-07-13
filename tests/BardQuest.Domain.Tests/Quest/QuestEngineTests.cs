@@ -79,7 +79,7 @@ public class QuestEngineTests
     [Fact]
     public void WorkingSetMonstersReportDefeatedFromLinks()
     {
-        RatedLibrary lib = Library(("a", 6), ("b", 6));
+        RatedLibrary lib = Library(("a", 5), ("b", 6));
         var scores = new FakeScores(new Dictionary<int, PerformanceFacts> { [1] = Cleared(0.95) });
         BardQuest.Domain.Quest.Quest quest = QuestWith(new DeliveryState(0, ["a", "b"], null), new ProvenanceLink(1, "a", DateTime.UtcNow));
 
@@ -89,5 +89,8 @@ public class QuestEngineTests
         MonsterStatus b = view.WorkingSet.Single(m => m.Hash == "b");
         Assert.True(a.Defeated);
         Assert.False(b.Defeated);
+        // Hardest in-set monster is the Elite mini-boss; the other is Regular
+        Assert.Equal(BardQuest.Domain.Quest.MonsterType.Elite, view.WorkingSet.OrderByDescending(m => m.Sum).First().Type);
+        Assert.Equal(BardQuest.Domain.Quest.MonsterType.Regular, view.WorkingSet.OrderBy(m => m.Sum).First().Type);
     }
 }
