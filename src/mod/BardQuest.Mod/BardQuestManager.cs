@@ -54,7 +54,15 @@ public sealed class BardQuestManager : MonoBehaviour
         Scan.ScanService.EnsureRatings();
         _art ??= new UI.BardQuestArt();
         _canvas ??= new BardQuestCanvas(_art);
-        _canvas.ShowRoot(new UI.PlaceholderScreen(_canvas)); // replaced by SavesScreen in Task 7
+        ShowSaves();
+    }
+
+    private void ShowSaves()
+    {
+        _canvas.ShowRoot(new UI.SavesScreen(
+            _canvas, Controller, _art,
+            openHub: q => ModLog.Info($"open hub for quest {q.Id}"),   // Task 9 replaces with ShowHub(q)
+            openCreate: () => ModLog.Info("open create")));            // Task 8 replaces with ShowCreate()
     }
 
     private QuestLauncher _launcher;
