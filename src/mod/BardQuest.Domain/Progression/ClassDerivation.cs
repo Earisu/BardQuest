@@ -45,4 +45,22 @@ public static class ClassDerivation
 
         return (lo, MaxScore, PlayerClass.Legendweaver);
     }
+
+    /// <summary>The [Lo, Hi) 0–50 score range of a class — the same edges chart ranks and quest
+    /// content bands share. Legendweaver runs from the last band edge to <see cref="MaxScore"/>.</summary>
+    public static (double Lo, double Hi) Range(PlayerClass cls)
+    {
+        double lo = 0;
+        foreach ((double max, PlayerClass c) in Bands)
+        {
+            if (c == cls)
+            {
+                return (lo, max);
+            }
+
+            lo = max;
+        }
+
+        return (lo, MaxScore); // Legendweaver — above the last band edge
+    }
 }

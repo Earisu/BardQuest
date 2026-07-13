@@ -2,7 +2,10 @@
   <PropertyGroup>
     <TargetFramework>netstandard2.1</TargetFramework>
     <AssemblyName>BardQuest.Mod</AssemblyName>
-    <Nullable>disable</Nullable>
+    <!-- annotations (not disable): the quest I/O types return nullable (?) to match the Domain
+         IScoreSource interface, but flow warnings stay off so the Unity/YARG interop stays clean.
+         CI sets TreatWarningsAsErrors, so `disable` here made the ? annotations (CS8632) hard errors. -->
+    <Nullable>annotations</Nullable>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
   </PropertyGroup>
   <Import Project="Refs.props" />

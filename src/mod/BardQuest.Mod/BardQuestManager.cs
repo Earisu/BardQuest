@@ -1,6 +1,15 @@
+using BardQuest.Domain.Quest;
+using BardQuest.Domain.Ratings;
+using BardQuest.Mod.Quest;
+
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 using YARG.Menu.Main;
+// Alias, not a plain `using BardQuest.Domain.Quest;` type reference: this file lives in namespace
+// BardQuest.Mod, and BardQuest.Mod.Quest is a nested sub-namespace of it, so a bare `Quest` would bind
+// to that sub-namespace (CS0118) rather than the Domain record — same pitfall documented in QuestStore.cs.
+using DomainQuest = BardQuest.Domain.Quest.Quest;
 
 namespace BardQuest.Mod;
 
@@ -19,6 +28,12 @@ public sealed class BardQuestManager : MonoBehaviour
         var go = new GameObject("BardQuestManager");
         DontDestroyOnLoad(go);
         Instance = go.AddComponent<BardQuestManager>();
+        Instance._scores = new ScoreSource();
+        Instance._launcher = new QuestLauncher(Instance._scores);
+        // Subscribe here (not in an OnEnable/OnDisable pair): this is a DontDestroyOnLoad singleton, created
+        // once and never disabled, so it never needs to unsubscribe — and keeping the subscription off Unity
+        // magic methods stops `dotnet format` (IDE0051) from deleting them as "unused private members".
+        SceneManager.sceneLoaded += Instance.OnSceneLoaded;
         ModLog.Info("Manager created.");
         return Instance;
     }
@@ -35,5 +50,59 @@ public sealed class BardQuestManager : MonoBehaviour
         Scan.ScanService.EnsureRatings();
         _canvas ??= new BardQuestCanvas();
         _canvas.Show();
+    }
+
+    private QuestLauncher _launcher;
+    private ScoreSource _scores;
+    private DomainQuest _activeQuest; // the quest the current launch belongs to (set when launching)
+
+    private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
+    {
+        // Ignore the scene load INTO Gameplay — that is the launch itself, not a return from it. Only a
+        // scene load AWAY from Gameplay (Score on finish, Menu on quit) is a "return" worth correlating.
+        // Without this guard, Correlate() would fire the instant Launch()'s own LoadScene(Gameplay) call
+        // completes (sceneLoaded fires for the newly-loaded Gameplay scene too), clearing Pending before
+        // the player has even played the song.
+        if (scene.buildIndex == (int)YARG.SceneIndex.Gameplay || _launcher?.Pending == null)
+        {
+            return;
+        }
+
+        ProvenanceLink link = _launcher.Correlate();
+        if (link == null || _activeQuest == null)
+        {
+            return; // quit/unfinished/invalid → no credit
+        }
+
+        try
+        {
+            DomainQuest updated = QuestProgression.Record(_activeQuest, link, CurrentLibrary(), _scores);
+            _activeQuest = updated;
+            IReadOnlyList<DomainQuest> all =
+            [
+                .. QuestStore.Load(updated.ProfileId)
+                                .Where(q => q.Id != updated.Id),
+                updated,
+            ];
+            QuestStore.Save(all);
+            ModLog.Info($"Quest {updated.Id} recorded a linked play (now {updated.Links.Count} links).");
+        }
+        catch (Exception ex)
+        {
+            ModLog.Error("Quest record-on-return failed: " + ex);
+        }
+    }
+
+    // Builds the rated library for the active quest's (instrument, difficulty) from the cache on disk.
+    private RatedLibrary CurrentLibrary()
+    {
+        Dictionary<string, List<ChartMetrics>> cache = Scan.RatingCacheFile.Load();
+        var view = new Dictionary<string, IReadOnlyList<ChartMetrics>>(cache.Count);
+        foreach (KeyValuePair<string, List<ChartMetrics>> kv in cache)
+        {
+            view[kv.Key] = kv.Value;
+        }
+
+        return new RatedLibrary(view, _activeQuest.Instrument, _activeQuest.Difficulty);
     }
 }
