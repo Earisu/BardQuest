@@ -81,13 +81,7 @@ public sealed class BardQuestManager : MonoBehaviour
         try
         {
             DomainQuest updated = QuestProgression.Record(active, link, QuestController.LibraryFor(active), _scores);
-            IReadOnlyList<DomainQuest> all =
-            [
-                .. QuestStore.Load(updated.ProfileId)
-                                .Where(q => q.Id != updated.Id),
-                updated,
-            ];
-            QuestStore.Save(updated.ProfileId, all);
+            QuestStore.Upsert(updated); // in-place replace: keeps the quest's slot, preserves other profiles
             Controller.Adopt(updated); // keep the controller's ActiveQuest current for further plays
             ModLog.Info($"Quest {updated.Id} recorded a linked play (now {updated.Links.Count} links).");
             return updated;
@@ -162,6 +156,9 @@ public sealed class BardQuestManager : MonoBehaviour
         {
             _canvas?.HideOverlay();
             _preview?.Stop(); // insurance: never let a song preview bleed into gameplay
+            // Free the Hub's album textures now that its screens are gone (popped by PrepareForLaunch); they
+            // are Unity native objects the GC won't reclaim, and the Hub re-enriches its small set on return.
+            _enricher?.Teardown();
         }
     }
 }

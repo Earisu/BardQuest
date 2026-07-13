@@ -66,20 +66,26 @@ public static class QuestStore
         }
     }
 
-    // Replaces the complete quest set for one profile, leaving every other profile's quests untouched.
-    // Callers pass this profile's full list (from Load(profileId), then modified); we re-merge it with the
-    // quests that belong to other profiles so a play on one YARG profile can't erase another's saves.
-    public static void Save(Guid profileId, IReadOnlyList<DomainQuest> quests)
+    // Inserts a new quest or replaces an existing one (matched by Id) in place. The whole saves.json is
+    // round-tripped: every other quest — including other profiles' — is preserved untouched, so a play on
+    // one YARG profile can't erase another's saves, and an updated quest keeps its original slot instead of
+    // being re-appended to the end (which would make it visibly jump to the last save slot on return).
+    public static void Upsert(DomainQuest quest)
     {
-        IReadOnlyList<DomainQuest> merged =
-        [
-            .. ReadAll().Where(q => q.ProfileId != profileId),
-            .. quests,
-        ];
+        var all = new List<DomainQuest>(ReadAll());
+        int i = all.FindIndex(q => q.Id == quest.Id);
+        if (i >= 0)
+        {
+            all[i] = quest;
+        }
+        else
+        {
+            all.Add(quest);
+        }
 
         string path = Path();
         string tmp = path + ".tmp";
-        var file = new SaveFile { Version = FormatVersion, Quests = [.. merged] };
+        var file = new SaveFile { Version = FormatVersion, Quests = all };
         File.WriteAllText(tmp, JsonConvert.SerializeObject(file, Settings));
         if (File.Exists(path))
         {

@@ -56,8 +56,7 @@ public sealed class QuestController(ScoreSource scores, QuestLauncher launcher)
         DomainQuest quest = QuestFactory.Create(
             profile.Id, instrument, difficulty, pace, LibraryFor(stub), DateTime.UtcNow);
 
-        IReadOnlyList<DomainQuest> all = [.. QuestStore.Load(profile.Id), quest];
-        QuestStore.Save(profile.Id, all);
+        QuestStore.Upsert(quest);
         return quest;
     }
 
