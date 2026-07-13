@@ -1,5 +1,4 @@
 using BardQuest.Domain.Quest;
-using BardQuest.Domain.Ratings;
 using BardQuest.Mod.Quest;
 
 using UnityEngine;
@@ -30,6 +29,7 @@ public sealed class BardQuestManager : MonoBehaviour
         Instance = go.AddComponent<BardQuestManager>();
         Instance._scores = new ScoreSource();
         Instance._launcher = new QuestLauncher(Instance._scores);
+        Instance.Controller = new QuestController(Instance._scores, Instance._launcher);
         // Subscribe here (not in an OnEnable/OnDisable pair): this is a DontDestroyOnLoad singleton, created
         // once and never disabled, so it never needs to unsubscribe — and keeping the subscription off Unity
         // magic methods stops `dotnet format` (IDE0051) from deleting them as "unused private members".
@@ -40,6 +40,9 @@ public sealed class BardQuestManager : MonoBehaviour
 
     // Called on every MainMenu.OnEnable. Ensures the BardQuest entry is present (Task 4 fills this in).
     public void OnMainMenuEnabled(MainMenu mainMenu) => MainMenuEntry.Ensure(this, mainMenu);
+
+    // The read/launch orchestrator the UITK screens call (Tasks 6-9).
+    public QuestController Controller { get; private set; }
 
     private BardQuestCanvas _canvas;
 
@@ -54,7 +57,6 @@ public sealed class BardQuestManager : MonoBehaviour
 
     private QuestLauncher _launcher;
     private ScoreSource _scores;
-    private DomainQuest _activeQuest; // the quest the current launch belongs to (set when launching)
 
     private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
     {
@@ -69,15 +71,15 @@ public sealed class BardQuestManager : MonoBehaviour
         }
 
         ProvenanceLink link = _launcher.Correlate();
-        if (link == null || _activeQuest == null)
+        DomainQuest active = Controller?.ActiveQuest;
+        if (link == null || active == null)
         {
             return; // quit/unfinished/invalid → no credit
         }
 
         try
         {
-            DomainQuest updated = QuestProgression.Record(_activeQuest, link, CurrentLibrary(), _scores);
-            _activeQuest = updated;
+            DomainQuest updated = QuestProgression.Record(active, link, QuestController.LibraryFor(active), _scores);
             IReadOnlyList<DomainQuest> all =
             [
                 .. QuestStore.Load(updated.ProfileId)
@@ -85,24 +87,12 @@ public sealed class BardQuestManager : MonoBehaviour
                 updated,
             ];
             QuestStore.Save(all);
+            Controller.Adopt(updated); // keep the controller's ActiveQuest current for further plays
             ModLog.Info($"Quest {updated.Id} recorded a linked play (now {updated.Links.Count} links).");
         }
         catch (Exception ex)
         {
             ModLog.Error("Quest record-on-return failed: " + ex);
         }
-    }
-
-    // Builds the rated library for the active quest's (instrument, difficulty) from the cache on disk.
-    private RatedLibrary CurrentLibrary()
-    {
-        Dictionary<string, List<ChartMetrics>> cache = Scan.RatingCacheFile.Load();
-        var view = new Dictionary<string, IReadOnlyList<ChartMetrics>>(cache.Count);
-        foreach (KeyValuePair<string, List<ChartMetrics>> kv in cache)
-        {
-            view[kv.Key] = kv.Value;
-        }
-
-        return new RatedLibrary(view, _activeQuest.Instrument, _activeQuest.Difficulty);
     }
 }
