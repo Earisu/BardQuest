@@ -18,7 +18,7 @@ public class RatedLibraryTests
     private static ChartMetrics Chart(double strength, Difficulty diff = Difficulty.Expert, int intensity = 3)
         => new(Instrument.ProDrums, diff, intensity, new StubRaw(strength));
 
-    private static IReadOnlyDictionary<string, IReadOnlyList<ChartMetrics>> Cache(
+    private static Dictionary<string, IReadOnlyList<ChartMetrics>> Cache(
         params (string Hash, ChartMetrics[] Charts)[] songs)
     {
         var d = new Dictionary<string, IReadOnlyList<ChartMetrics>>();
