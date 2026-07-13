@@ -61,6 +61,11 @@ public sealed class QuestController(ScoreSource scores, QuestLauncher launcher)
         return quest;
     }
 
+    // Whether a song hash still resolves to a playable chart in the current library. The Hub checks this
+    // BEFORE tearing its screens down for launch: a stale rating-cache entry whose song has since left
+    // SongContainer would otherwise leave the UI in an input-less soft-lock (Launch bails, no scene loads).
+    public bool CanLaunch(string songHashHex) => SongCatalog.ByHash(songHashHex) != null;
+
     public void Launch(DomainQuest quest, string songHashHex)
     {
         // Align the active player to the quest so the play is scored under the quest's (instrument,

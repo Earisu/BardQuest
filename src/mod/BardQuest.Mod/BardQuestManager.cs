@@ -54,13 +54,16 @@ public sealed class BardQuestManager : MonoBehaviour
             return;
         }
 
+        // Capture the fought monster's hash before Correlate clears Pending, so the reopened Hub can put
+        // the cursor back on it (like YARG's library keeps its position across a song).
+        string foughtHash = _launcher.Pending.Value.SongHashHex;
         DomainQuest resume = RecordReturn();
         if (resume != null)
         {
             // The seam runs AFTER MainMenu.OnEnable has pushed YARG's nav scheme, so re-opening here lands
             // our Hub scheme ON TOP of the main menu's (input + music go to us). It also runs during scene
             // activation, before the first frame renders, so the canvas covers the menu with no flash.
-            ReopenToHub(resume);
+            ReopenToHub(resume, foughtHash);
         }
     }
 
@@ -102,6 +105,7 @@ public sealed class BardQuestManager : MonoBehaviour
     private UI.BardQuestArt _art;
     private BardQuestCanvas _canvas;
     private SongEnricher _enricher; // BardQuest.Mod.Quest.SongEnricher, resolved via the `using BardQuest.Mod.Quest;` above
+    private SongPreviewPlayer _preview;
 
     public void OpenCanvas()
     {
@@ -126,18 +130,22 @@ public sealed class BardQuestManager : MonoBehaviour
         _canvas.Push(new UI.CreateQuestScreen(_canvas, Controller, openHub: ShowHub));
     }
 
-    private void ShowHub(DomainQuest quest)
+    private void ShowHub(DomainQuest quest) => ShowHub(quest, null);
+
+    private void ShowHub(DomainQuest quest, string selectHash)
     {
         _enricher ??= new SongEnricher();
-        _canvas.Push(new UI.HubScreen(_canvas, Controller, _enricher, _art, quest));
+        _preview ??= new SongPreviewPlayer();
+        _canvas.Push(new UI.HubScreen(_canvas, Controller, _enricher, _preview, _art, quest, selectHash));
     }
 
     // Re-open BardQuest on a quest's Hub after returning from a Fight: rebuild the roster as the base
-    // screen (so Back from the Hub lands there) then push the Hub for the quest just played, refreshed.
-    private void ReopenToHub(DomainQuest quest)
+    // screen (so Back from the Hub lands there) then push the Hub for the quest just played, refreshed,
+    // with the cursor restored to the monster just fought.
+    private void ReopenToHub(DomainQuest quest, string selectHash)
     {
         ShowSaves();
-        ShowHub(quest);
+        ShowHub(quest, selectHash);
     }
 
     private QuestLauncher _launcher;
@@ -153,6 +161,7 @@ public sealed class BardQuestManager : MonoBehaviour
         if (scene.buildIndex == (int)YARG.SceneIndex.Gameplay)
         {
             _canvas?.HideOverlay();
+            _preview?.Stop(); // insurance: never let a song preview bleed into gameplay
         }
     }
 }

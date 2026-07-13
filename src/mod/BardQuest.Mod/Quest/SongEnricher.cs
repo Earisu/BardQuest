@@ -3,7 +3,6 @@ extern alias yargpkg;
 using UnityEngine;
 
 using YARG.Helpers.Extensions; // LoadTexture(this YARGImage, bool)
-using YARG.Song;               // SongContainer (Assembly-CSharp)
 
 using yargpkg::YARG.Core.IO;   // YARGImage
 
@@ -26,7 +25,7 @@ public sealed class SongEnricher
             return hit;
         }
 
-        RtSongEntry? entry = Find(songHashHex);
+        RtSongEntry? entry = SongCatalog.ByHash(songHashHex);
         if (entry == null)
         {
             return null;
@@ -49,18 +48,5 @@ public sealed class SongEnricher
         var info = new SongInfo(entry.Name.ToString(), entry.Artist.ToString(), album);
         _cache[songHashHex] = info;
         return info;
-    }
-
-    private static RtSongEntry? Find(string hashHex)
-    {
-        foreach (RtSongEntry e in SongContainer.Songs)
-        {
-            if (string.Equals(e.Hash.ToString(), hashHex, StringComparison.OrdinalIgnoreCase))
-            {
-                return e;
-            }
-        }
-
-        return null;
     }
 }

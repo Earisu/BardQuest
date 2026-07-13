@@ -30,6 +30,7 @@ public sealed class CreateQuestScreen : IScreen
     private readonly QuestController _controller;
     private readonly Action<DomainQuest> _openHub;
     private readonly Label[] _rowLabels = new Label[3]; // 0 pace, 1 difficulty, 2 begin
+    private readonly bool _hasProfile;
     private int _paceIdx;
     private int _diffIdx;
     private int _row;
@@ -43,6 +44,7 @@ public sealed class CreateQuestScreen : IScreen
         _openHub = openHub;
 
         RtYargProfile? profile = controller.ActiveProfile();
+        _hasProfile = profile != null;
         // Bridge runtime -> vendored Difficulty by integer: the two Difficulty enums are distinct CLR
         // types (two-YARG.Core split) but byte-identical in layout, so an int round-trip is safe.
         Difficulty current = profile != null ? (Difficulty)(int)profile.CurrentDifficulty : Difficulty.Expert;
@@ -107,6 +109,14 @@ public sealed class CreateQuestScreen : IScreen
                 _rowLabels[1].text = $"Difficulty: {Difficulties[_diffIdx]}";
                 break;
             default:
+                // No active YARG profile → Create would throw out of this nav callback. Guard instead:
+                // there is nothing to scope a quest to, so leave the form as-is (Back returns to Saves).
+                if (!_hasProfile)
+                {
+                    ModLog.Warn("CreateQuestScreen: no active YARG profile; cannot begin a quest.");
+                    break;
+                }
+
                 DomainQuest quest = _controller.Create(Paces[_paceIdx], Difficulties[_diffIdx]);
                 _openHub(quest);
                 break;

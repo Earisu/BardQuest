@@ -28,6 +28,7 @@ public sealed class HubScreen : IScreen
     private readonly BardQuestCanvas _canvas;
     private readonly QuestController _controller;
     private readonly SongEnricher _enricher;
+    private readonly SongPreviewPlayer _preview;
     private readonly BardQuestArt _art;
     private readonly DomainQuest _quest;
 
@@ -36,17 +37,21 @@ public sealed class HubScreen : IScreen
     private readonly VisualElement _listCol = new();
     private readonly VisualElement _detailCol = new();
     private int _selected;
+    private string _pendingSelectHash; // one-shot: restore this monster's highlight on the first Refresh
 
     public VisualElement Root { get; }
 
     public HubScreen(
-        BardQuestCanvas canvas, QuestController controller, SongEnricher enricher, BardQuestArt art, DomainQuest quest)
+        BardQuestCanvas canvas, QuestController controller, SongEnricher enricher, SongPreviewPlayer preview,
+        BardQuestArt art, DomainQuest quest, string initialSelectionHash = null)
     {
         _canvas = canvas;
         _controller = controller;
         _enricher = enricher;
+        _preview = preview;
         _art = art;
         _quest = quest;
+        _pendingSelectHash = initialSelectionHash;
 
         Root = new VisualElement
         {
@@ -72,6 +77,21 @@ public sealed class HubScreen : IScreen
         _monsters = _view.AtClassBoss && _view.Boss != null
             ? new List<MonsterStatus> { _view.Boss }
             : new List<MonsterStatus>(_view.WorkingSet);
+
+        // Restore the highlight to a specific monster (the one just fought), like YARG's library keeps its
+        // cursor across a song. One-shot; falls back to the clamped index if that monster is gone (e.g. the
+        // working set redelivered or collapsed to a boss/Elite).
+        if (_pendingSelectHash != null)
+        {
+            int idx = _monsters.FindIndex(m => string.Equals(m.Hash, _pendingSelectHash, StringComparison.OrdinalIgnoreCase));
+            if (idx >= 0)
+            {
+                _selected = idx;
+            }
+
+            _pendingSelectHash = null;
+        }
+
         _selected = Mathf.Clamp(_selected, 0, Math.Max(0, _monsters.Count - 1));
         BuildLeft();
         BuildDetail();
@@ -172,6 +192,7 @@ public sealed class HubScreen : IScreen
         _detailCol.Clear();
         if (_monsters.Count == 0)
         {
+            _preview.Stop();
             _detailCol.Add(new Label(_view.IsComplete ? "The quest is complete." : "No monsters delivered.")
             {
                 style = { color = (Color)BardTheme.Parchment, fontSize = 22 },
@@ -181,6 +202,10 @@ public sealed class HubScreen : IScreen
 
         MonsterStatus m = _monsters[_selected];
         SongEnricher.SongInfo? info = _enricher.Lookup(m.Hash);
+
+        // Preview the highlighted song, like YARG's Music Library. No-op if it is already previewing this
+        // song; debounced inside the player so scrolling Up/Down only previews the settled selection.
+        _preview.Play(m.Hash);
 
         // Framed album art (frame overlays the album at a fixed size).
         var frameStack = new VisualElement { style = { width = 220, height = 220, alignSelf = Align.Center } };
@@ -222,9 +247,13 @@ public sealed class HubScreen : IScreen
             _detailCol.Add(CompareBar(a, m.Profile[a], _view.Profile[a].Level));
         }
 
-        _detailCol.Add(new Label(m.Defeated ? "Confirm to replay" : "Confirm to FIGHT")
+        _detailCol.Add(new Label(m.Defeated ? "Already cleared" : "Confirm to FIGHT")
         {
-            style = { color = (Color)BardTheme.Glowmoss, fontSize = 22, marginTop = 16, unityTextAlign = TextAnchor.MiddleCenter },
+            style =
+            {
+                color = (Color)(m.Defeated ? BardTheme.Gilt : BardTheme.Glowmoss),
+                fontSize = 22, marginTop = 16, unityTextAlign = TextAnchor.MiddleCenter,
+            },
         });
     }
 
@@ -268,11 +297,39 @@ public sealed class HubScreen : IScreen
             return;
         }
 
+        MonsterStatus target = _monsters[_selected];
+
+        // A cleared monster cannot be re-fought: no replay, so it can never re-award XP for a song already
+        // beaten. Confirm is a no-op on it (the detail panel shows it as cleared instead of a fight prompt).
+        if (target.Defeated)
+        {
+            return;
+        }
+
+        string hash = target.Hash;
+
+        // Guard BEFORE tearing anything down: if this monster's song has left the library (a stale rating
+        // cache), Launch would bail with no scene load, leaving the canvas on an input-less guard scheme —
+        // a soft-lock. Bail here instead, keeping the Hub fully interactive.
+        if (!_controller.CanLaunch(hash))
+        {
+            ModLog.Warn($"HubScreen: song {hash} is no longer in the library; not launching.");
+            return;
+        }
+
+        _preview.Stop(); // silence the preview so it can't bleed into gameplay
+
         // Cleanly tear our screens off YARG's Navigator and push a music-suppressing guard so the menu
         // track never bleeds over the song (see PrepareForLaunch). On return, BardQuestManager records the
         // play and re-opens this Hub for the quest automatically — no re-entering the mod by hand.
         _canvas.PrepareForLaunch();
-        _controller.Launch(_quest, _monsters[_selected].Hash);
+        _controller.Launch(_quest, hash);
+    }
+
+    private void Back()
+    {
+        _preview.Stop();
+        _canvas.Pop();
     }
 
     public NavigationScheme BuildScheme() => new(new List<NavigationScheme.Entry>
@@ -280,6 +337,6 @@ public sealed class HubScreen : IScreen
         new(MenuAction.Up, "Menu.Common.Up", () => Move(-1)),
         new(MenuAction.Down, "Menu.Common.Down", () => Move(1)),
         new(MenuAction.Green, "Menu.Common.Confirm", Confirm),
-        new(MenuAction.Red, "Menu.Common.Back", _canvas.Pop),
+        new(MenuAction.Red, "Menu.Common.Back", Back),
     }, false);
 }
