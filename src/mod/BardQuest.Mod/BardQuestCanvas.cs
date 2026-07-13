@@ -25,6 +25,12 @@ public sealed class BardQuestCanvas
         UnityEngine.Object.DontDestroyOnLoad(go);
 
         PanelSettings panel = ScriptableObject.CreateInstance<PanelSettings>();
+        // Scale the UI with the screen (default is ConstantPixelSize, which renders tiny on a 4K TV).
+        // The whole layout is authored against a 1920x1080 reference.
+        panel.scaleMode = PanelScaleMode.ScaleWithScreenSize;
+        panel.referenceResolution = new Vector2Int(1920, 1080);
+        panel.screenMatchMode = PanelScreenMatchMode.MatchWidthOrHeight;
+        panel.match = 0.5f;
         _doc = go.AddComponent<UIDocument>();
         _doc.panelSettings = panel;
 
@@ -77,6 +83,33 @@ public sealed class BardQuestCanvas
             _stack[^1].Root.style.display = DisplayStyle.Flex;
         }
     }
+
+    // Prepare to launch a song into Gameplay (called from Fight). Three things matter through the
+    // Menu -> Gameplay transition:
+    //   1. Our screens' NavigationSchemes must come OFF YARG's shared Navigator stack cleanly, in sync
+    //      with our own _stack. The Menu scene fully unloads on launch, and YARG's MainMenu.OnDisable
+    //      pops whatever is on top of that stack — so any scheme of ours left on top would be popped out
+    //      from under us, desyncing the two stacks. We pop our own first.
+    //   2. The menu MusicPlayer must stay silent, or its random track bleeds over the song. YARG keys the
+    //      MusicPlayer off the TOP scheme's AllowsMusicPlayer, so we push a single guard scheme with it
+    //      false. MainMenu.OnDisable pops this guard as the Menu scene unloads.
+    //   3. We deliberately DO NOT hide the canvas here — it keeps showing (now just the forest backdrop,
+    //      the screens having been popped) so YARG's main menu is never revealed for a jarring flash
+    //      before the song. The canvas is hidden only once the Gameplay scene is up (HideOverlay, called
+    //      from BardQuestManager.OnSceneLoaded), and re-opened fresh from an empty _stack on return.
+    public void PrepareForLaunch()
+    {
+        while (_stack.Count > 0)
+        {
+            PopInternal();
+        }
+
+        Navigator.Instance.PushScheme(new NavigationScheme(new List<NavigationScheme.Entry>(), false));
+    }
+
+    // Hide the canvas as the launched Gameplay scene comes up, so the DontDestroyOnLoad UIDocument does
+    // not render over the game. No scheme changes — the guard from PrepareForLaunch is torn down by YARG.
+    public void HideOverlay() => Hide();
 
     private void PopInternal()
     {

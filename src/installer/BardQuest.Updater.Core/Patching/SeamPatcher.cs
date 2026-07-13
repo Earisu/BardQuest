@@ -41,10 +41,16 @@ public static class SeamPatcher
 
         MethodReference bootstrapRef = ResolveBootstrapMethod(module, resolver, managedDir, BootstrapMethod, paramCount: 1);
 
+        // Inject at the END of OnEnable (just before its ret), NOT the start. MainMenu.OnEnable pushes
+        // YARG's own navigation scheme in its body; by running our bootstrap after that push, the mod can
+        // synchronously re-open its Hub (on the return-from-song path) and have its scheme land ON TOP of
+        // the main menu's — no fragile one-frame deferral, and the canvas shows before the first render so
+        // there is no menu flash. For a trivial ret-only body (the synthetic test) this is identical to
+        // injecting at the start. Branch-free bodies like MainMenu.OnEnable have no jump targeting the ret.
         ILProcessor il = onEnable.Body.GetILProcessor();
-        Instruction first = onEnable.Body.Instructions[0];
-        il.InsertBefore(first, il.Create(OpCodes.Ldarg_0));
-        il.InsertBefore(first, il.Create(OpCodes.Call, bootstrapRef));
+        Instruction ret = onEnable.Body.Instructions[^1];
+        il.InsertBefore(ret, il.Create(OpCodes.Ldarg_0));
+        il.InsertBefore(ret, il.Create(OpCodes.Call, bootstrapRef));
 
         // Idempotency marker.
         module.Types.Add(new TypeDefinition(MarkerNamespace, MarkerType,

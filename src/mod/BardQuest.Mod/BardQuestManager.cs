@@ -38,14 +38,70 @@ public sealed class BardQuestManager : MonoBehaviour
         return Instance;
     }
 
-    // Called on every MainMenu.OnEnable. Ensures the BardQuest entry is present (Task 4 fills this in).
-    public void OnMainMenuEnabled(MainMenu mainMenu) => MainMenuEntry.Ensure(this, mainMenu);
+    // Called at the END of every MainMenu.OnEnable (Cecil seam, injected after YARG's own PushScheme).
+    // Ensures the BardQuest entry is present, and — when we are returning from a Fight — records the play
+    // and re-opens the Hub automatically.
+    public void OnMainMenuEnabled(MainMenu mainMenu)
+    {
+        MainMenuEntry.Ensure(this, mainMenu);
+
+        // A launch is pending only between a Fight and the first main-menu enable after that play. This is
+        // the robust return signal: MainMenu.OnEnable always fires when the Menu scene comes back (on the
+        // completed-song path AND the quit path), and never on the intermediate Score scene. By now the
+        // play's score is written to scores.db, so we can correlate and record it.
+        if (_launcher?.Pending == null)
+        {
+            return;
+        }
+
+        DomainQuest resume = RecordReturn();
+        if (resume != null)
+        {
+            // The seam runs AFTER MainMenu.OnEnable has pushed YARG's nav scheme, so re-opening here lands
+            // our Hub scheme ON TOP of the main menu's (input + music go to us). It also runs during scene
+            // activation, before the first frame renders, so the canvas covers the menu with no flash.
+            ReopenToHub(resume);
+        }
+    }
+
+    // Correlate + record the just-finished play and return the quest to re-open (the updated quest on a
+    // credited play, else the still-active quest on a quit/unfinished return). Clears the pending launch.
+    private DomainQuest RecordReturn()
+    {
+        ProvenanceLink link = _launcher.Correlate();
+        DomainQuest active = Controller?.ActiveQuest;
+        if (link == null || active == null)
+        {
+            return active; // quit/unfinished/invalid → no credit, but still re-open the Hub
+        }
+
+        try
+        {
+            DomainQuest updated = QuestProgression.Record(active, link, QuestController.LibraryFor(active), _scores);
+            IReadOnlyList<DomainQuest> all =
+            [
+                .. QuestStore.Load(updated.ProfileId)
+                                .Where(q => q.Id != updated.Id),
+                updated,
+            ];
+            QuestStore.Save(all);
+            Controller.Adopt(updated); // keep the controller's ActiveQuest current for further plays
+            ModLog.Info($"Quest {updated.Id} recorded a linked play (now {updated.Links.Count} links).");
+            return updated;
+        }
+        catch (Exception ex)
+        {
+            ModLog.Error("Quest record-on-return failed: " + ex);
+            return active;
+        }
+    }
 
     // The read/launch orchestrator the UITK screens call (Tasks 6-9).
     public QuestController Controller { get; private set; }
 
     private UI.BardQuestArt _art;
     private BardQuestCanvas _canvas;
+    private SongEnricher _enricher; // BardQuest.Mod.Quest.SongEnricher, resolved via the `using BardQuest.Mod.Quest;` above
 
     public void OpenCanvas()
     {
@@ -61,15 +117,27 @@ public sealed class BardQuestManager : MonoBehaviour
     {
         _canvas.ShowRoot(new UI.SavesScreen(
             _canvas, Controller, _art,
-            openHub: q => ModLog.Info($"open hub for quest {q.Id}"),   // Task 9 replaces with ShowHub(q)
+            openHub: ShowHub,
             openCreate: ShowCreate));
     }
 
     private void ShowCreate()
     {
-        _canvas.Push(new UI.CreateQuestScreen(
-            _canvas, Controller,
-            openHub: q => ModLog.Info($"created quest {q.Id}, open hub"))); // Task 9 replaces with ShowHub
+        _canvas.Push(new UI.CreateQuestScreen(_canvas, Controller, openHub: ShowHub));
+    }
+
+    private void ShowHub(DomainQuest quest)
+    {
+        _enricher ??= new SongEnricher();
+        _canvas.Push(new UI.HubScreen(_canvas, Controller, _enricher, _art, quest));
+    }
+
+    // Re-open BardQuest on a quest's Hub after returning from a Fight: rebuild the roster as the base
+    // screen (so Back from the Hub lands there) then push the Hub for the quest just played, refreshed.
+    private void ReopenToHub(DomainQuest quest)
+    {
+        ShowSaves();
+        ShowHub(quest);
     }
 
     private QuestLauncher _launcher;
@@ -77,39 +145,14 @@ public sealed class BardQuestManager : MonoBehaviour
 
     private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
     {
-        // Ignore the scene load INTO Gameplay — that is the launch itself, not a return from it. Only a
-        // scene load AWAY from Gameplay (Score on finish, Menu on quit) is a "return" worth correlating.
-        // Without this guard, Correlate() would fire the instant Launch()'s own LoadScene(Gameplay) call
-        // completes (sceneLoaded fires for the newly-loaded Gameplay scene too), clearing Pending before
-        // the player has even played the song.
-        if (scene.buildIndex == (int)YARG.SceneIndex.Gameplay || _launcher?.Pending == null)
+        // The only scene-load we care about is the launched song's Gameplay scene coming up: hide our
+        // (DontDestroyOnLoad) canvas so it stops rendering over the game. We keep it visible through the
+        // Menu -> Gameplay transition on purpose (showing the forest backdrop, covering YARG's main menu)
+        // so there is no menu flash before the song. Recording + re-opening on return is driven from
+        // OnMainMenuEnabled, not here.
+        if (scene.buildIndex == (int)YARG.SceneIndex.Gameplay)
         {
-            return;
-        }
-
-        ProvenanceLink link = _launcher.Correlate();
-        DomainQuest active = Controller?.ActiveQuest;
-        if (link == null || active == null)
-        {
-            return; // quit/unfinished/invalid → no credit
-        }
-
-        try
-        {
-            DomainQuest updated = QuestProgression.Record(active, link, QuestController.LibraryFor(active), _scores);
-            IReadOnlyList<DomainQuest> all =
-            [
-                .. QuestStore.Load(updated.ProfileId)
-                                .Where(q => q.Id != updated.Id),
-                updated,
-            ];
-            QuestStore.Save(all);
-            Controller.Adopt(updated); // keep the controller's ActiveQuest current for further plays
-            ModLog.Info($"Quest {updated.Id} recorded a linked play (now {updated.Links.Count} links).");
-        }
-        catch (Exception ex)
-        {
-            ModLog.Error("Quest record-on-return failed: " + ex);
+            _canvas?.HideOverlay();
         }
     }
 }

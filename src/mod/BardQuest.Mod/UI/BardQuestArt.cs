@@ -18,7 +18,9 @@ public sealed class BardQuestArt
     private readonly Assembly _asm = typeof(BardQuestArt).Assembly;
     private readonly Dictionary<string, Texture2D> _cache = [];
 
-    public Texture2D MonsterFrame(MonsterType type) => Get("monster_" + type.ToString().ToLowerInvariant(), 0x6B4A2F);
+    // The monster frame overlays the album art (real frames have a transparent center). Until the bespoke
+    // frame PNG exists its placeholder must be fully transparent, or a translucent tint washes the album.
+    public Texture2D MonsterFrame(MonsterType type) => Get("monster_" + type.ToString().ToLowerInvariant(), 0x6B4A2F, 0x00);
     public Texture2D ClassMedallion(PlayerClass cls) => Get("class_" + cls.ToString().ToLowerInvariant(), 0xD9A441);
     public Texture2D RankBadge(Rank rank) => Get("rank_" + rank.ToString().ToLowerInvariant(), 0x4ADE80);
     public Texture2D AttributeIcon(Attribute a) => Get("attr_" + a.ToString().ToLowerInvariant(), 0x4ADE80);
@@ -29,14 +31,14 @@ public sealed class BardQuestArt
     public Texture2D BannerSecondary() => Get("banner_secondary", 0x6B4A2F);
     public Texture2D Logo() => Get("logo", 0x4ADE80);
 
-    private Texture2D Get(string name, uint placeholderRgb)
+    private Texture2D Get(string name, uint placeholderRgb, byte placeholderAlpha = 0xC0)
     {
         if (_cache.TryGetValue(name, out Texture2D? cached))
         {
             return cached;
         }
 
-        Texture2D tex = Load(name) ?? Placeholder(placeholderRgb);
+        Texture2D tex = Load(name) ?? Placeholder(placeholderRgb, placeholderAlpha);
         _cache[name] = tex;
         return tex;
     }
@@ -68,10 +70,10 @@ public sealed class BardQuestArt
         return null;
     }
 
-    private static Texture2D Placeholder(uint rgb)
+    private static Texture2D Placeholder(uint rgb, byte alpha)
     {
         var tex = new Texture2D(4, 4, TextureFormat.RGBA32, false);
-        var c = new Color32((byte)((rgb >> 16) & 0xFF), (byte)((rgb >> 8) & 0xFF), (byte)(rgb & 0xFF), 0xC0);
+        var c = new Color32((byte)((rgb >> 16) & 0xFF), (byte)((rgb >> 8) & 0xFF), (byte)(rgb & 0xFF), alpha);
         var pixels = new Color32[16];
         for (int i = 0; i < pixels.Length; i++)
         {
