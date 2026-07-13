@@ -37,7 +37,7 @@ public class QuestProgressionTests
     public void CreateStartsAnEmptyBuskerQuestWithADeliveredWorkingSet()
     {
         RatedLibrary lib = Library(("a", 3), ("b", 4), ("c", 5), ("d", 6), ("e", 7), ("f", 8));
-        BardQuest.Domain.Quest.Quest quest = QuestFactory.Create(
+        Domain.Quest.Quest quest = QuestFactory.Create(
             Guid.NewGuid(), Instrument.ProDrums, Difficulty.Expert, QuestPace.Journey, lib, new DateTime(2026, 7, 11));
 
         Assert.Empty(quest.Links);
@@ -50,16 +50,16 @@ public class QuestProgressionTests
     public void RecordAppendsTheLink()
     {
         RatedLibrary lib = Library(("a", 5), ("b", 6), ("c", 7));
-        BardQuest.Domain.Quest.Quest quest = QuestFactory.Create(
+        Domain.Quest.Quest quest = QuestFactory.Create(
             Guid.NewGuid(), Instrument.ProDrums, Difficulty.Expert, QuestPace.Journey, lib, DateTime.UtcNow);
         var scores = new FakeScores(new Dictionary<int, PerformanceFacts>
         {
             [1] = new(1.0, false, 5, 100, 0, Difficulty.Expert),
         });
 
-        BardQuest.Domain.Quest.Quest after = QuestProgression.Record(quest, new ProvenanceLink(1, "a", DateTime.UtcNow), lib, scores);
+        Domain.Quest.Quest after = QuestProgression.Record(quest, new ProvenanceLink(1, "a", DateTime.UtcNow), lib, scores);
 
-        Assert.Single(after.Links);
+        _ = Assert.Single(after.Links);
         Assert.Equal(1, after.Links[0].PlayerScoreRecordId);
     }
 
@@ -69,7 +69,7 @@ public class QuestProgressionTests
         // A tiny library: two Busker-band monsters. After both are in the exclude set, a re-delivery
         // must bump RerunCount and re-offer rather than deliver an empty set.
         RatedLibrary lib = Library(("a", 5), ("b", 6));
-        var quest = new BardQuest.Domain.Quest.Quest(
+        var quest = new Domain.Quest.Quest(
             Guid.NewGuid(), Guid.NewGuid(), Instrument.ProDrums, Difficulty.Expert, QuestPace.Sprint,
             DateTime.UtcNow, [], new DeliveryState(0, ["a", "b"], null));
         var scores = new FakeScores(new Dictionary<int, PerformanceFacts>
@@ -79,10 +79,33 @@ public class QuestProgressionTests
         });
 
         // Clear both delivered monsters; the second clear should trigger a rerun re-delivery.
-        BardQuest.Domain.Quest.Quest afterA = QuestProgression.Record(quest, new ProvenanceLink(1, "a", DateTime.UtcNow), lib, scores);
-        BardQuest.Domain.Quest.Quest afterB = QuestProgression.Record(afterA, new ProvenanceLink(2, "b", DateTime.UtcNow.AddMinutes(1)), lib, scores);
+        Domain.Quest.Quest afterA = QuestProgression.Record(quest, new ProvenanceLink(1, "a", DateTime.UtcNow), lib, scores);
+        Domain.Quest.Quest afterB = QuestProgression.Record(afterA, new ProvenanceLink(2, "b", DateTime.UtcNow.AddMinutes(1)), lib, scores);
 
         Assert.True(afterB.Delivery.RerunCount >= 1);
         Assert.NotEmpty(afterB.Delivery.WorkingSet);
+    }
+
+    [Fact]
+    public void WorkingSetDepletesDespiteHashCaseMismatch()
+    {
+        // Real-world casing split: delivery + library key hashes UPPERCASE, scores.db links are lowercase.
+        // Clearing every delivered monster must still register as depletion (here → pool exhaustion → a
+        // rerun), not freeze the set forever. Before the case-insensitive DefeatedHashes fix this stayed 0.
+        RatedLibrary lib = Library(("A", 5), ("B", 6));
+        var quest = new Domain.Quest.Quest(
+            Guid.NewGuid(), Guid.NewGuid(), Instrument.ProDrums, Difficulty.Expert, QuestPace.Sprint,
+            DateTime.UtcNow, [], new DeliveryState(0, ["A", "B"], null));
+        var scores = new FakeScores(new Dictionary<int, PerformanceFacts>
+        {
+            [1] = new(1.0, false, 5, 100, 0, Difficulty.Expert),
+            [2] = new(1.0, false, 5, 100, 0, Difficulty.Expert),
+        });
+
+        Domain.Quest.Quest afterA = QuestProgression.Record(quest, new ProvenanceLink(1, "a", DateTime.UtcNow), lib, scores);
+        Domain.Quest.Quest afterB = QuestProgression.Record(afterA, new ProvenanceLink(2, "b", DateTime.UtcNow.AddMinutes(1)), lib, scores);
+
+        Assert.True(afterB.Delivery.RerunCount >= 1,
+            "clearing all delivered monsters (lowercase links vs UPPERCASE set) must deplete and redeliver");
     }
 }
