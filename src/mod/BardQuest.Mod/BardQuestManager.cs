@@ -44,6 +44,7 @@ public sealed class BardQuestManager : MonoBehaviour
     // The read/launch orchestrator the UITK screens call (Tasks 6-9).
     public QuestController Controller { get; private set; }
 
+    private UI.BardQuestArt _art;
     private BardQuestCanvas _canvas;
 
     public void OpenCanvas()
@@ -51,8 +52,9 @@ public sealed class BardQuestManager : MonoBehaviour
         // Rate on demand: entering BardQuest is what triggers the (fire-and-forget) rating build, so
         // YARG's own launch/scan is never burdened with it. EnsureRatings self-guards and never throws.
         Scan.ScanService.EnsureRatings();
-        _canvas ??= new BardQuestCanvas();
-        _canvas.Show();
+        _art ??= new UI.BardQuestArt();
+        _canvas ??= new BardQuestCanvas(_art);
+        _canvas.ShowRoot(new UI.PlaceholderScreen(_canvas)); // replaced by SavesScreen in Task 7
     }
 
     private QuestLauncher _launcher;
