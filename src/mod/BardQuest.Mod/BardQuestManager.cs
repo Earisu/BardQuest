@@ -87,7 +87,7 @@ public sealed class BardQuestManager : MonoBehaviour
                                 .Where(q => q.Id != updated.Id),
                 updated,
             ];
-            QuestStore.Save(all);
+            QuestStore.Save(updated.ProfileId, all);
             Controller.Adopt(updated); // keep the controller's ActiveQuest current for further plays
             ModLog.Info($"Quest {updated.Id} recorded a linked play (now {updated.Links.Count} links).");
             return updated;

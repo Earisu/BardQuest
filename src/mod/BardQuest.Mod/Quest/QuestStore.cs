@@ -37,6 +37,11 @@ public static class QuestStore
     }
 
     public static IReadOnlyList<DomainQuest> Load(Guid profileId)
+        => [.. ReadAll().Where(q => q.ProfileId == profileId)];
+
+    // Every profile's quests live in one saves.json. Reads back the full set so a per-profile Save can
+    // preserve the other profiles' quests instead of clobbering them.
+    private static IReadOnlyList<DomainQuest> ReadAll()
     {
         string path = Path();
         if (!File.Exists(path))
@@ -52,7 +57,7 @@ public static class QuestStore
                 return []; // unknown/older format → treat as empty (migration lever; no destructive rewrite)
             }
 
-            return [.. file.Quests.Where(q => q.ProfileId == profileId)];
+            return file.Quests;
         }
         catch (Exception ex)
         {
@@ -61,11 +66,20 @@ public static class QuestStore
         }
     }
 
-    public static void Save(IReadOnlyList<DomainQuest> quests)
+    // Replaces the complete quest set for one profile, leaving every other profile's quests untouched.
+    // Callers pass this profile's full list (from Load(profileId), then modified); we re-merge it with the
+    // quests that belong to other profiles so a play on one YARG profile can't erase another's saves.
+    public static void Save(Guid profileId, IReadOnlyList<DomainQuest> quests)
     {
+        IReadOnlyList<DomainQuest> merged =
+        [
+            .. ReadAll().Where(q => q.ProfileId != profileId),
+            .. quests,
+        ];
+
         string path = Path();
         string tmp = path + ".tmp";
-        var file = new SaveFile { Version = FormatVersion, Quests = [.. quests] };
+        var file = new SaveFile { Version = FormatVersion, Quests = [.. merged] };
         File.WriteAllText(tmp, JsonConvert.SerializeObject(file, Settings));
         if (File.Exists(path))
         {

@@ -57,7 +57,7 @@ public sealed class QuestController(ScoreSource scores, QuestLauncher launcher)
             profile.Id, instrument, difficulty, pace, LibraryFor(stub), DateTime.UtcNow);
 
         IReadOnlyList<DomainQuest> all = [.. QuestStore.Load(profile.Id), quest];
-        QuestStore.Save(all);
+        QuestStore.Save(profile.Id, all);
         return quest;
     }
 
