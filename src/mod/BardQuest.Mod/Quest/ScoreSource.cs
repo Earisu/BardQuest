@@ -1,4 +1,3 @@
-// src/mod/BardQuest.Mod/Quest/ScoreSource.cs
 using BardQuest.Domain.Progression;
 using BardQuest.Domain.Quest;
 
@@ -58,7 +57,7 @@ public sealed class ScoreSource : IScoreSource, IDisposable
     // MAX(Id) is a scalar aggregate, not a mapped row: sqlite-net's Query<T> matches result COLUMNS onto
     // a POCO's PROPERTIES by name, and `int` has none, so Query<int> would silently always yield [0]
     // rather than the real value. ExecuteScalar<T> is sqlite-net's correct API for a single-column,
-    // single-row scalar read — this is a deliberate deviation from the task-9 brief's `Query<int>` draft.
+    // single-row scalar read.
     public int MaxGameRecordId() => _db.ExecuteScalar<int>("SELECT COALESCE(MAX(Id),0) FROM GameRecords");
 
     // The newest non-replay play of this song, for this profile/instrument/difficulty, recorded AFTER the

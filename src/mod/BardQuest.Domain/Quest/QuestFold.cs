@@ -1,4 +1,3 @@
-// src/mod/BardQuest.Domain/Quest/QuestFold.cs
 using BardQuest.Domain.Progression;
 using BardQuest.Domain.Ratings;
 

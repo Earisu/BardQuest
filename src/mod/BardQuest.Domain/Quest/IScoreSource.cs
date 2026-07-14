@@ -1,4 +1,3 @@
-// src/mod/BardQuest.Domain/Quest/IScoreSource.cs
 using BardQuest.Domain.Progression;
 
 namespace BardQuest.Domain.Quest;

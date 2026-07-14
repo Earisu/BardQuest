@@ -1,4 +1,3 @@
-// src/mod/BardQuest.Domain/Quest/PlayRecord.cs
 using BardQuest.Domain.Progression;
 
 namespace BardQuest.Domain.Quest;

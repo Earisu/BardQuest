@@ -37,6 +37,11 @@ public static class QuestStore
     }
 
     public static IReadOnlyList<DomainQuest> Load(Guid profileId)
+        => [.. ReadAll().Where(q => q.ProfileId == profileId)];
+
+    // Every profile's quests live in one saves.json. Reads back the full set so a per-profile Save can
+    // preserve the other profiles' quests instead of clobbering them.
+    private static IReadOnlyList<DomainQuest> ReadAll()
     {
         string path = Path();
         if (!File.Exists(path))
@@ -52,7 +57,7 @@ public static class QuestStore
                 return []; // unknown/older format → treat as empty (migration lever; no destructive rewrite)
             }
 
-            return [.. file.Quests.Where(q => q.ProfileId == profileId)];
+            return file.Quests;
         }
         catch (Exception ex)
         {
@@ -61,11 +66,26 @@ public static class QuestStore
         }
     }
 
-    public static void Save(IReadOnlyList<DomainQuest> quests)
+    // Inserts a new quest or replaces an existing one (matched by Id) in place. The whole saves.json is
+    // round-tripped: every other quest — including other profiles' — is preserved untouched, so a play on
+    // one YARG profile can't erase another's saves, and an updated quest keeps its original slot instead of
+    // being re-appended to the end (which would make it visibly jump to the last save slot on return).
+    public static void Upsert(DomainQuest quest)
     {
+        var all = new List<DomainQuest>(ReadAll());
+        int i = all.FindIndex(q => q.Id == quest.Id);
+        if (i >= 0)
+        {
+            all[i] = quest;
+        }
+        else
+        {
+            all.Add(quest);
+        }
+
         string path = Path();
         string tmp = path + ".tmp";
-        var file = new SaveFile { Version = FormatVersion, Quests = [.. quests] };
+        var file = new SaveFile { Version = FormatVersion, Quests = all };
         File.WriteAllText(tmp, JsonConvert.SerializeObject(file, Settings));
         if (File.Exists(path))
         {

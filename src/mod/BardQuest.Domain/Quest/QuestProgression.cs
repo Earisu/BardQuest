@@ -73,7 +73,10 @@ public static class QuestProgression
 
     private static HashSet<string> DefeatedHashes(Quest quest, RatedLibrary library, IScoreSource scores, double bar)
     {
-        var defeated = new HashSet<string>();
+        // Case-insensitive: link hashes are lowercase (scores.db lower(hex(...))) but the working set is
+        // keyed UPPERCASE (rating cache). A case-sensitive set would never match, so depletion would never
+        // fire and the working set would never redeliver — the same bug fixed in RatedLibrary/QuestEngine.
+        var defeated = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (ProvenanceLink l in quest.Links)
         {
             PerformanceFacts? facts = scores.Resolve(l);

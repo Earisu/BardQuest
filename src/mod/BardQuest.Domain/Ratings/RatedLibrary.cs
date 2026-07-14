@@ -8,7 +8,10 @@ namespace BardQuest.Domain.Ratings;
 /// raw metrics. Sentinel charts (Intensity &lt; 0 — attempted but unrateable) are excluded.</summary>
 public sealed class RatedLibrary
 {
-    private readonly Dictionary<string, AttributeProfile> _profiles = [];
+    // Case-insensitive: the rating cache (and quest delivery derived from it) keys hashes UPPERCASE, while
+    // scores.db provenance links carry them lowercase (lower(hex(...))). A case-sensitive map would drop
+    // every link on lookup — no XP, nothing ever "cleared". Hashes are hex, so ordinal-ignore-case is exact.
+    private readonly Dictionary<string, AttributeProfile> _profiles = new(StringComparer.OrdinalIgnoreCase);
 
     public RatedLibrary(
         IReadOnlyDictionary<string, IReadOnlyList<ChartMetrics>> byHash, Instrument instrument, Difficulty difficulty)

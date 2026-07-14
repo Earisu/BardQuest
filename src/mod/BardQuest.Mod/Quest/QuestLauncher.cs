@@ -1,11 +1,9 @@
-// src/mod/BardQuest.Mod/Quest/QuestLauncher.cs
 extern alias yargpkg;
 
 using BardQuest.Domain.Quest;
 
 using YARG;               // GlobalVariables, SceneIndex
 using YARG.Core;          // Instrument, Difficulty (domain-side)
-using YARG.Song;          // SongContainer (Assembly-CSharp)
 
 using DomainQuest = BardQuest.Domain.Quest.Quest;
 using RtSongEntry = yargpkg::YARG.Core.Song.SongEntry;
@@ -33,7 +31,7 @@ public sealed class QuestLauncher(ScoreSource scores)
 
     public void Launch(DomainQuest quest, string songHashHex)
     {
-        RtSongEntry entry = FindSong(songHashHex);
+        RtSongEntry? entry = SongCatalog.ByHash(songHashHex);
         if (entry == null)
         {
             ModLog.Error($"QuestLauncher: song {songHashHex} not in library.");
@@ -61,16 +59,4 @@ public sealed class QuestLauncher(ScoreSource scores)
         return rec == null ? null : new ProvenanceLink(rec.PlayerScoreRecordId, rec.SongHashHex, rec.PlayedAt);
     }
 
-    private static RtSongEntry FindSong(string hashHex)
-    {
-        foreach (RtSongEntry e in SongContainer.Songs)
-        {
-            if (string.Equals(e.Hash.ToString(), hashHex, StringComparison.OrdinalIgnoreCase))
-            {
-                return e;
-            }
-        }
-
-        return null;
-    }
 }
