@@ -36,7 +36,7 @@ public sealed class PlayerProfile
         (Class, Subrank) = ClassDerivation.Derive(score);
     }
 
-    /// <summary>Builds the character sheet from a quest's completed songs — the subsystem entry point.
+    /// <summary>Builds the character sheet from a quest's completed songs.
     /// Folds the plays in chronological order (each scored against the level accrued from earlier plays,
     /// because the gap penalty references your current level), so the profile is a pure function of the
     /// date-ordered links + scores.db + rating cache: retune a constant, rebuild exactly, nothing stored.</summary>

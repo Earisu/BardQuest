@@ -93,7 +93,7 @@ public sealed class BardQuestManager : MonoBehaviour
         }
     }
 
-    // The read/launch orchestrator the UITK screens call (Tasks 6-9).
+    // The read/launch orchestrator the UITK screens call.
     public QuestController Controller { get; private set; }
 
     private UI.BardQuestArt _art;

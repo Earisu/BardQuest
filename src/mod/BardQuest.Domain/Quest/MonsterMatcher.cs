@@ -3,9 +3,9 @@ using BardQuest.Domain.Ratings;
 
 namespace BardQuest.Domain.Quest;
 
-/// <summary>The aggregate matcher — Phase-2 matching is by RankScore (<see cref="AttributeProfile.Sum"/>)
-/// only; per-axis targeting is subsystem (C). It draws a working set at/just-above the player's 0–50
-/// score inside the current class band, and picks a class boss from the low end of the next band. All
+/// <summary>The aggregate matcher — matches by RankScore (<see cref="AttributeProfile.Sum"/>) only;
+/// per-axis targeting is a deliberate non-goal for now. It draws a working set at/just-above the player's
+/// 0–50 score inside the current class band, and picks a class boss from the low end of the next band. All
 /// constants are first-pass CALIBRATION TARGETS.</summary>
 public static class MonsterMatcher
 {

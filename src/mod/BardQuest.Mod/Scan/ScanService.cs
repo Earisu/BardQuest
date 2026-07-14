@@ -29,7 +29,7 @@ public static class ScanService
 {
     private const int WorkerCount = 16;
 
-    // Registered analyzers (Phase 1: drums only). Adding an instrument = add its analyzer here
+    // Registered analyzers — drums only for now. Adding an instrument = add its analyzer here
     // (and its extractor branch in RateEntry).
     private static readonly IChartAnalyzer[] Analyzers =
         [new DrumChartAnalyzer(YARG.Core.Instrument.ProDrums, DrumKitMap.ProFourLane)];
