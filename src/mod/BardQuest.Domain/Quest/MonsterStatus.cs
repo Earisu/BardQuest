@@ -1,4 +1,3 @@
-// src/mod/BardQuest.Domain/Quest/MonsterStatus.cs
 using BardQuest.Domain.Ratings;
 
 namespace BardQuest.Domain.Quest;

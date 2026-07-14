@@ -1,4 +1,3 @@
-// src/mod/BardQuest.Mod/Quest/QuestController.cs
 extern alias yargpkg;
 
 using BardQuest.Domain.Progression;

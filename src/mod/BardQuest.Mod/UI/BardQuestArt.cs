@@ -1,4 +1,3 @@
-// src/mod/BardQuest.Mod/UI/BardQuestArt.cs
 using System.Reflection;
 
 using BardQuest.Domain.Progression;

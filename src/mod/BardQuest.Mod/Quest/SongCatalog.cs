@@ -1,4 +1,3 @@
-// src/mod/BardQuest.Mod/Quest/SongCatalog.cs
 extern alias yargpkg;
 
 using YARG.Song; // SongContainer (Assembly-CSharp)

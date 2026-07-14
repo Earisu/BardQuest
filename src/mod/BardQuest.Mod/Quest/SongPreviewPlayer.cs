@@ -1,4 +1,3 @@
-// src/mod/BardQuest.Mod/Quest/SongPreviewPlayer.cs
 extern alias yargpkg;
 
 using System.Threading;

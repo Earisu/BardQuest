@@ -1,4 +1,3 @@
-// src/mod/BardQuest.Mod/Quest/ScoreSource.cs
 using BardQuest.Domain.Progression;
 using BardQuest.Domain.Quest;
 

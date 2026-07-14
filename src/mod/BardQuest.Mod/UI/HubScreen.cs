@@ -1,4 +1,3 @@
-// src/mod/BardQuest.Mod/UI/HubScreen.cs
 extern alias yargpkg;
 
 using BardQuest.Domain.Progression;
@@ -101,7 +100,6 @@ public sealed class HubScreen : IScreen
     {
         _listCol.Clear();
 
-        // Bard status header.
         var header = new VisualElement { style = { flexDirection = FlexDirection.Row, alignItems = Align.Center, marginBottom = 16 } };
         header.Add(new Image { image = _art.ClassMedallion(_view.Class), style = { width = 72, height = 72, marginRight = 12 } });
         var titleCol = new VisualElement();
@@ -207,7 +205,6 @@ public sealed class HubScreen : IScreen
         // song; debounced inside the player so scrolling Up/Down only previews the settled selection.
         _preview.Play(m.Hash);
 
-        // Framed album art (frame overlays the album at a fixed size).
         var frameStack = new VisualElement { style = { width = 220, height = 220, alignSelf = Align.Center } };
         var album = new Image
         {

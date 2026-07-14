@@ -1,4 +1,3 @@
-// src/mod/BardQuest.Domain/Quest/QuestState.cs
 using BardQuest.Domain.Progression;
 
 namespace BardQuest.Domain.Quest;

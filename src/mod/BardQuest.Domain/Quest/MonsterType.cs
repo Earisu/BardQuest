@@ -1,4 +1,3 @@
-// src/mod/BardQuest.Domain/Quest/MonsterType.cs
 namespace BardQuest.Domain.Quest;
 
 /// <summary>What kind of encounter a delivered monster is. <see cref="Elite"/> is the highlighted

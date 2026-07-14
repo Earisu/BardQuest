@@ -1,4 +1,3 @@
-// src/mod/BardQuest.Mod/UI/SavesScreen.cs
 extern alias yargpkg;
 
 using BardQuest.Domain.Quest;

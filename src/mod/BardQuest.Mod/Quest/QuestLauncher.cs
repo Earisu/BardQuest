@@ -1,4 +1,3 @@
-// src/mod/BardQuest.Mod/Quest/QuestLauncher.cs
 extern alias yargpkg;
 
 using BardQuest.Domain.Quest;
