@@ -101,7 +101,11 @@ public sealed class HubScreen : IScreen
         _listCol.Clear();
 
         var header = new VisualElement { style = { flexDirection = FlexDirection.Row, alignItems = Align.Center, marginBottom = 16 } };
-        header.Add(new Image { image = _art.ClassMedallion(_view.Class), style = { width = 72, height = 72, marginRight = 12 } });
+        header.Add(new Image
+        {
+            image = _art.ClassMedallion(_view.Class),
+            style = { width = 84, height = 84, marginRight = 12 },
+        });
         var titleCol = new VisualElement();
         titleCol.Add(new Label(_view.IsComplete
             ? "LEGENDWEAVER — Quest Complete!"
@@ -161,9 +165,10 @@ public sealed class HubScreen : IScreen
         {
             style = { color = (Color)BardTheme.Parchment, fontSize = 18, flexGrow = 1 },
         });
-        row.Add(new Label(m.Profile.ToRank().ToString())
+        row.Add(new Image
         {
-            style = { color = (Color)BardTheme.Gilt, fontSize = 16, marginRight = 8 },
+            image = _art.RankBadge(m.Profile.ToRank()),
+            style = { width = 30, height = 30, marginRight = 8 },
         });
         row.Add(new Label(Marker(m))
         {
@@ -205,13 +210,15 @@ public sealed class HubScreen : IScreen
         // song; debounced inside the player so scrolling Up/Down only previews the settled selection.
         _preview.Play(m.Hash);
 
-        var frameStack = new VisualElement { style = { width = 220, height = 220, alignSelf = Align.Center } };
+        var frameStack = new VisualElement { style = { width = 340, height = 340, alignSelf = Align.Center } };
         var album = new Image
         {
             image = info?.Album,
             // YARGImage.LoadTexture decodes bottom-up (YARG's own uGUI covers flip it with a negative
             // uvRect); UITK does not, so flip the element vertically or the cover renders upside down.
-            style = { position = Position.Absolute, left = 16, top = 16, width = 188, height = 188 },
+            // Inset ~17.5% each side to match the frame art's transparent window (~65% of the frame), so
+            // the cover fills the opening instead of poking past the border.
+            style = { position = Position.Absolute, left = 60, top = 60, width = 220, height = 220 },
         };
         if (info?.Album != null)
         {
@@ -226,7 +233,7 @@ public sealed class HubScreen : IScreen
         frameStack.Add(new Image
         {
             image = _art.MonsterFrame(m.Type),
-            style = { position = Position.Absolute, left = 0, top = 0, width = 220, height = 220 },
+            style = { position = Position.Absolute, left = 0, top = 0, width = 340, height = 340 },
         });
         _detailCol.Add(frameStack);
 

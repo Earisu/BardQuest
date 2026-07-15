@@ -93,8 +93,11 @@ public sealed class SavesScreen : IScreen
         }
 
         ActiveQuestView view = _controller.Resolve(quest);
-        var medallion = new Image { image = _art.ClassMedallion(view.Class), style = { width = 96, height = 96 } };
-        slot.Add(medallion);
+        slot.Add(new Image
+        {
+            image = _art.ClassMedallion(view.Class),
+            style = { width = 110, height = 110 },
+        });
         slot.Add(new Label($"{BardTheme.ClassName(view.Class)} {BardTheme.Roman(view.Subrank)}")
         {
             style = { color = (Color)BardTheme.Gilt, fontSize = 22, marginTop = 8 },
