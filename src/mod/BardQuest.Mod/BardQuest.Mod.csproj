@@ -20,5 +20,6 @@
     <!-- Bespoke UI art, baked into the mod DLL and loaded at runtime via reflection. Missing files
          are tolerated by BardQuestArt (generated placeholder), so the mod builds before art lands. -->
     <EmbeddedResource Include="Art\**\*.png" />
+    <EmbeddedResource Include="Art\fonts\*.ttf" />
   </ItemGroup>
 </Project>
