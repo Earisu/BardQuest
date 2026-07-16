@@ -27,6 +27,7 @@ public sealed class CreateQuestScreen : IScreen
 
     private readonly BardQuestCanvas _canvas;
     private readonly QuestController _controller;
+    private readonly BardQuestArt _art;
     private readonly Action<DomainQuest> _openHub;
     private readonly Label[] _rowLabels = new Label[3]; // 0 pace, 1 difficulty, 2 begin
     private readonly bool _hasProfile;
@@ -36,10 +37,11 @@ public sealed class CreateQuestScreen : IScreen
 
     public VisualElement Root { get; }
 
-    public CreateQuestScreen(BardQuestCanvas canvas, QuestController controller, Action<DomainQuest> openHub)
+    public CreateQuestScreen(BardQuestCanvas canvas, QuestController controller, BardQuestArt art, Action<DomainQuest> openHub)
     {
         _canvas = canvas;
         _controller = controller;
+        _art = art;
         _openHub = openHub;
 
         RtYargProfile? profile = controller.ActiveProfile();
@@ -60,6 +62,11 @@ public sealed class CreateQuestScreen : IScreen
                 alignItems = Align.Center, justifyContent = Justify.Center,
             },
         };
+        Root.Add(new Image
+        {
+            image = _art.Logo(),
+            style = { width = 400, height = 400, marginBottom = 4 },
+        });
         Root.Add(new Label("NEW QUEST")
         {
             style = { color = (Color)BardTheme.Gilt, fontSize = 40, marginBottom = 24, unityFontStyleAndWeight = FontStyle.Bold },

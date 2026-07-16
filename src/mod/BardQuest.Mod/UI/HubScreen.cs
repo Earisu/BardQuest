@@ -2,7 +2,6 @@ extern alias yargpkg;
 
 using BardQuest.Domain.Progression;
 using BardQuest.Domain.Quest;
-using BardQuest.Domain.Ratings;
 using BardQuest.Mod.Quest;
 
 using UnityEngine;
@@ -32,7 +31,7 @@ public sealed class HubScreen : IScreen
     private readonly DomainQuest _quest;
 
     private ActiveQuestView _view;
-    private List<MonsterStatus> _monsters = new();
+    private List<MonsterStatus> _monsters = [];
     private readonly VisualElement _listCol = new();
     private readonly VisualElement _detailCol = new();
     private int _selected;
@@ -59,10 +58,14 @@ public sealed class HubScreen : IScreen
         _listCol.style.width = Length.Percent(42);
         _listCol.style.marginRight = 24;
         _detailCol.style.flexGrow = 1;
-        _detailCol.style.backgroundColor = (Color)BardTheme.Mossdeep;
-        _detailCol.style.paddingTop = 20;
-        _detailCol.style.paddingLeft = 20;
-        _detailCol.style.paddingRight = 20;
+        // Size the framed panel to its content and center it vertically, rather than stretching to the full
+        // canvas height — on a non-16:9 window a full-height panel runs its bottom border off-screen.
+        _detailCol.style.alignSelf = Align.Center;
+        _detailCol.style.paddingTop = 52;
+        _detailCol.style.paddingBottom = 52;
+        _detailCol.style.paddingLeft = 60;
+        _detailCol.style.paddingRight = 60;
+        BardChrome.Panel(_detailCol, _art);
         Root.Add(_listCol);
         Root.Add(_detailCol);
 
@@ -74,8 +77,8 @@ public sealed class HubScreen : IScreen
     {
         _view = _controller.Resolve(_quest);
         _monsters = _view.AtClassBoss && _view.Boss != null
-            ? new List<MonsterStatus> { _view.Boss }
-            : new List<MonsterStatus>(_view.WorkingSet);
+            ? [_view.Boss]
+            : [.. _view.WorkingSet];
 
         // Restore the highlight to a specific monster (the one just fought), like YARG's library keeps its
         // cursor across a song. One-shot; falls back to the clamped index if that monster is gone (e.g. the
@@ -122,10 +125,16 @@ public sealed class HubScreen : IScreen
         _listCol.Add(radar);
 
         string section = _view.AtClassBoss ? "— CLASS BOSS —" : _view.AtMiniBoss ? "— ELITE —" : "— Monsters —";
-        _listCol.Add(new Label(section)
+        var sectionBanner = new VisualElement
         {
-            style = { color = (Color)BardTheme.Parchment, fontSize = 18, marginTop = 12, marginBottom = 6 },
+            style = { height = 44, marginTop = 12, marginBottom = 6, alignItems = Align.Center, justifyContent = Justify.Center },
+        };
+        BardChrome.BannerSecondary(sectionBanner, _art, 44);
+        sectionBanner.Add(new Label(section)
+        {
+            style = { color = (Color)BardTheme.Parchment, fontSize = 18, unityFontStyleAndWeight = FontStyle.Bold },
         });
+        _listCol.Add(sectionBanner);
 
         for (int i = 0; i < _monsters.Count; i++)
         {
@@ -198,7 +207,7 @@ public sealed class HubScreen : IScreen
             _preview.Stop();
             _detailCol.Add(new Label(_view.IsComplete ? "The quest is complete." : "No monsters delivered.")
             {
-                style = { color = (Color)BardTheme.Parchment, fontSize = 22 },
+                style = { color = (Color)BardTheme.Nightwood, fontSize = 22 },
             });
             return;
         }
@@ -239,11 +248,11 @@ public sealed class HubScreen : IScreen
 
         _detailCol.Add(new Label(info?.Title ?? "Unknown")
         {
-            style = { color = (Color)BardTheme.Parchment, fontSize = 24, marginTop = 12, unityTextAlign = TextAnchor.MiddleCenter },
+            style = { color = (Color)BardTheme.Nightwood, fontSize = 24, marginTop = 12, unityFontStyleAndWeight = FontStyle.Bold, unityTextAlign = TextAnchor.MiddleCenter },
         });
         _detailCol.Add(new Label(info?.Artist ?? "")
         {
-            style = { color = (Color)BardTheme.Gilt, fontSize = 16, marginBottom = 12, unityTextAlign = TextAnchor.MiddleCenter },
+            style = { color = (Color)BardTheme.OldWood, fontSize = 16, marginBottom = 12, unityTextAlign = TextAnchor.MiddleCenter },
         });
 
         foreach (Attribute a in Axes)
@@ -251,23 +260,38 @@ public sealed class HubScreen : IScreen
             _detailCol.Add(CompareBar(a, m.Profile[a], _view.Profile[a].Level));
         }
 
-        _detailCol.Add(new Label(m.Defeated ? "Already cleared" : "Confirm to FIGHT")
+        var cta = new VisualElement
         {
             style =
             {
-                color = (Color)(m.Defeated ? BardTheme.Gilt : BardTheme.Glowmoss),
-                fontSize = 22, marginTop = 16, unityTextAlign = TextAnchor.MiddleCenter,
+                width = 340, height = 68, marginTop = 20, alignSelf = Align.Center,
+                alignItems = Align.Center, justifyContent = Justify.Center,
+            },
+        };
+        BardChrome.BannerPrimary(cta, _art, 68);
+        cta.Add(new Label(m.Defeated ? "Already cleared" : "Confirm to FIGHT")
+        {
+            style =
+            {
+                color = (Color)(m.Defeated ? BardTheme.Gilt : BardTheme.Parchment),
+                fontSize = 22, unityFontStyleAndWeight = FontStyle.Bold, unityTextAlign = TextAnchor.MiddleCenter,
             },
         });
+        _detailCol.Add(cta);
     }
 
     // One axis: the song's demand (colored) over the player's current level (faint) on a 0..10 track.
     private VisualElement CompareBar(Attribute a, double songScore, int playerLevel)
     {
         var wrap = new VisualElement { style = { flexDirection = FlexDirection.Row, alignItems = Align.Center, marginTop = 4 } };
+        wrap.Add(new Image
+        {
+            image = _art.AttributeIcon(a),
+            style = { width = 22, height = 22, marginRight = 6 },
+        });
         wrap.Add(new Label(BardTheme.AxisName(a))
         {
-            style = { color = (Color)BardTheme.Parchment, fontSize = 14, width = 90 },
+            style = { color = (Color)BardTheme.OldWood, fontSize = 14, width = 68 },
         });
         var track = new VisualElement { style = { flexGrow = 1, height = 14, backgroundColor = (Color)BardTheme.Nightwood } };
         track.Add(new VisualElement
@@ -336,11 +360,11 @@ public sealed class HubScreen : IScreen
         _canvas.Pop();
     }
 
-    public NavigationScheme BuildScheme() => new(new List<NavigationScheme.Entry>
-    {
+    public NavigationScheme BuildScheme() => new(
+    [
         new(MenuAction.Up, "Menu.Common.Up", () => Move(-1)),
         new(MenuAction.Down, "Menu.Common.Down", () => Move(1)),
         new(MenuAction.Green, "Menu.Common.Confirm", Confirm),
         new(MenuAction.Red, "Menu.Common.Back", Back),
-    }, false);
+    ], false);
 }

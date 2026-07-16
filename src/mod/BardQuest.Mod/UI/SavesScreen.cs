@@ -48,9 +48,14 @@ public sealed class SavesScreen : IScreen
                 alignItems = Align.Center, justifyContent = Justify.Center,
             },
         };
+        Root.Add(new Image
+        {
+            image = _art.Logo(),
+            style = { width = 400, height = 400, marginBottom = 4 },
+        });
         Root.Add(new Label("YOUR QUESTS")
         {
-            style = { color = (Color)BardTheme.Gilt, fontSize = 40, marginBottom = 24, unityFontStyleAndWeight = FontStyle.Bold },
+            style = { color = (Color)BardTheme.Gilt, fontSize = 28, marginBottom = 24, unityFontStyleAndWeight = FontStyle.Bold },
         });
 
         var row = new VisualElement { style = { flexDirection = FlexDirection.Row } };
@@ -76,18 +81,19 @@ public sealed class SavesScreen : IScreen
             style =
             {
                 width = 240, height = 320, marginLeft = 12, marginRight = 12,
-                backgroundColor = (Color)BardTheme.Mossdeep,
+                paddingTop = 22, paddingBottom = 22, paddingLeft = 22, paddingRight = 22,
                 alignItems = Align.Center, justifyContent = Justify.Center,
                 borderTopWidth = 3, borderBottomWidth = 3, borderLeftWidth = 3, borderRightWidth = 3,
             },
         };
+        BardChrome.Parchment(slot, _art);
         SetBorder(slot, BardTheme.OldWood);
 
         if (quest == null)
         {
             slot.Add(new Label("+ Create")
             {
-                style = { color = (Color)BardTheme.Parchment, fontSize = 26 },
+                style = { color = (Color)BardTheme.OldWood, fontSize = 26, unityFontStyleAndWeight = FontStyle.Bold },
             });
             return slot;
         }
@@ -100,11 +106,11 @@ public sealed class SavesScreen : IScreen
         });
         slot.Add(new Label($"{BardTheme.ClassName(view.Class)} {BardTheme.Roman(view.Subrank)}")
         {
-            style = { color = (Color)BardTheme.Gilt, fontSize = 22, marginTop = 8 },
+            style = { color = (Color)BardTheme.Nightwood, fontSize = 22, marginTop = 8, unityFontStyleAndWeight = FontStyle.Bold },
         });
         slot.Add(new Label($"{quest.Instrument} · {quest.Difficulty}")
         {
-            style = { color = (Color)BardTheme.Parchment, fontSize = 16, marginTop = 4 },
+            style = { color = (Color)BardTheme.OldWood, fontSize = 16, marginTop = 4 },
         });
         var radar = new PentagonRadar { style = { marginTop = 8 } };
         radar.SetLevels(view.Profile.Axes);
