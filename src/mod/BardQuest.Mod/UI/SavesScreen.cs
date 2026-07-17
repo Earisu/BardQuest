@@ -30,6 +30,8 @@ public sealed class SavesScreen : IScreen
 
     public VisualElement Root { get; }
 
+    public string Title => "Your Quests";
+
     public SavesScreen(
         BardQuestCanvas canvas, QuestController controller, BardQuestArt art,
         Action<DomainQuest> openHub, Action openCreate)

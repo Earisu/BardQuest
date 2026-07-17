@@ -9,5 +9,7 @@ public interface IScreen
 {
     VisualElement Root { get; }
 
+    string Title { get; }
+
     NavigationScheme BuildScheme();
 }

@@ -37,6 +37,8 @@ public sealed class CreateQuestScreen : IScreen
 
     public VisualElement Root { get; }
 
+    public string Title => "New Quest";
+
     public CreateQuestScreen(BardQuestCanvas canvas, QuestController controller, BardQuestArt art, Action<DomainQuest> openHub)
     {
         _canvas = canvas;

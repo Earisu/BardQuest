@@ -13,6 +13,7 @@ namespace BardQuest.Mod;
 public sealed class BardQuestCanvas
 {
     private readonly UIDocument _doc;
+    private readonly AppHeader _header;
     private readonly VisualElement _content;
     private readonly List<IScreen> _stack = [];
     private readonly BardQuestArt _art;
@@ -43,6 +44,8 @@ public sealed class BardQuestCanvas
                  ?? Resources.GetBuiltinResource<Font>("Arial.ttf");
         root.style.unityFont = font;
 
+        _header = new AppHeader(_art, Pop);
+        root.Add(_header.Root);
         _content = new VisualElement { style = { flexGrow = 1 } };
         root.Add(_content);
         root.style.display = DisplayStyle.None;
@@ -69,6 +72,7 @@ public sealed class BardQuestCanvas
         }
 
         Navigator.Instance.PushScheme(screen.BuildScheme());
+        _header.SetTitle(screen.Title);
     }
 
     public void Pop()
@@ -81,6 +85,7 @@ public sealed class BardQuestCanvas
         else
         {
             _stack[^1].Root.style.display = DisplayStyle.Flex;
+            _header.SetTitle(_stack[^1].Title);
         }
     }
 
@@ -104,7 +109,7 @@ public sealed class BardQuestCanvas
             PopInternal();
         }
 
-        Navigator.Instance.PushScheme(new NavigationScheme(new List<NavigationScheme.Entry>(), false));
+        Navigator.Instance.PushScheme(new NavigationScheme([], false));
     }
 
     // Hide the canvas as the launched Gameplay scene comes up, so the DontDestroyOnLoad UIDocument does

@@ -39,6 +39,8 @@ public sealed class HubScreen : IScreen
 
     public VisualElement Root { get; }
 
+    public string Title => "Quest Hub";
+
     public HubScreen(
         BardQuestCanvas canvas, QuestController controller, SongEnricher enricher, SongPreviewPlayer preview,
         BardQuestArt art, DomainQuest quest, string initialSelectionHash = null)
