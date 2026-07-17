@@ -19,8 +19,6 @@ public static class BardFont
     private static bool _tried;
     private static FontAsset? _displayAsset;
 
-    public static bool DisplayIsCustom => Ensure() != null;
-
     public static Font Body => field ??= LegacyRuntime();
 
     // Sets the ornate display face on an element: the embedded Cinzel SDF FontAsset when it realized,

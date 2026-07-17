@@ -23,6 +23,7 @@ public sealed class Fireflies
 
     private readonly Mote[] _motes = new Mote[Count];
     private readonly System.Random _rng = new(1234);
+    private readonly IVisualElementScheduledItem _tick;
 
     public VisualElement Root { get; }
 
@@ -43,7 +44,21 @@ public sealed class Fireflies
             _motes[i] = mote;
         }
 
-        _ = Root.schedule.Execute(Tick).Every(16);
+        _tick = Root.schedule.Execute(Tick).Every(16);
+    }
+
+    // Pause the per-frame tick while the surface is hidden — there is nothing to animate on an invisible
+    // overlay, and it avoids a perpetual tick running through song gameplay.
+    public void SetRunning(bool running)
+    {
+        if (running)
+        {
+            _tick.Resume();
+        }
+        else
+        {
+            _tick.Pause();
+        }
     }
 
     private void Tick()

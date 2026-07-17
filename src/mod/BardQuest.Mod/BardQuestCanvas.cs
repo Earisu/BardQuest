@@ -17,6 +17,7 @@ public sealed class BardQuestCanvas
     private readonly VisualElement _content;
     private readonly List<IScreen> _stack = [];
     private readonly BardQuestArt _art;
+    private readonly Fireflies _fireflies;
     private bool _visible;
 
     public BardQuestCanvas(BardQuestArt art)
@@ -44,13 +45,15 @@ public sealed class BardQuestCanvas
                  ?? Resources.GetBuiltinResource<Font>("Arial.ttf");
         root.style.unityFont = font;
 
-        root.Add(new Fireflies(_art).Root);
+        _fireflies = new Fireflies(_art);
+        root.Add(_fireflies.Root);
 
         _header = new AppHeader(_art, Pop);
         root.Add(_header.Root);
         _content = new VisualElement { style = { flexGrow = 1 } };
         root.Add(_content);
         root.style.display = DisplayStyle.None;
+        _fireflies.SetRunning(false); // start paused; the surface opens hidden, Show() resumes it
     }
 
     public void ShowRoot(IScreen root)
@@ -141,6 +144,7 @@ public sealed class BardQuestCanvas
 
         _doc.rootVisualElement.style.display = DisplayStyle.Flex;
         _visible = true;
+        _fireflies.SetRunning(true);
     }
 
     private void Hide()
@@ -152,5 +156,6 @@ public sealed class BardQuestCanvas
 
         _doc.rootVisualElement.style.display = DisplayStyle.None;
         _visible = false;
+        _fireflies.SetRunning(false);
     }
 }
