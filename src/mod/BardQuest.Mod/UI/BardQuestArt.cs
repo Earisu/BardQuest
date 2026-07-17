@@ -31,6 +31,7 @@ public sealed class BardQuestArt
     public Texture2D Logo() => Get("logo", 0x4ADE80);
     public Texture2D Glow() => Get("glow", 0xFFF3C0);
     public Texture2D SelectGlow() => Get("select_glow", 0xFFD868);
+    public Texture2D BeginGlow() => Get("begin_glow", 0xFFD868);
 
     private Texture2D Get(string name, uint placeholderRgb, byte placeholderAlpha = 0xC0)
     {
