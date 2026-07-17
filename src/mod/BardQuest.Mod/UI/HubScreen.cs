@@ -59,6 +59,10 @@ public sealed class HubScreen : IScreen
         _quest = quest;
         _pendingSelectHash = initialSelectionHash;
         _path = new JourneyPath(art);
+        // Build() recreates the path's internal nodes/state every Refresh, but the JourneyPath instance and
+        // this subscription persist across the Hub's lifetime — subscribing once here (not per-Refresh)
+        // avoids stacking duplicate handlers.
+        _path.SelectionChanged += OnJourneySelectionChanged;
 
         Root = new VisualElement
         {
@@ -131,8 +135,79 @@ public sealed class HubScreen : IScreen
         _selected = Mathf.Clamp(_selected, 0, Math.Max(0, _monsters.Count - 1));
         _path.Build(_view.Class, _view.Subrank);
         BuildPlayerPanel();
+
+        // Build() always lands the selection on the node whose State is Current (the player's own class), so
+        // the working-set monster list/encounter is always the right initial content here.
         BuildMonsterPanel();
         BuildEncounterPanel();
+    }
+
+    // Fires only from ◄►, never from Refresh (JourneyPath.Build sets its Selected field directly rather than
+    // through MoveSelection). Swaps the monster list + encounter for a summary panel on non-current nodes.
+    private void OnJourneySelectionChanged()
+    {
+        ClassNode node = _path.SelectedNode;
+        switch (node.State)
+        {
+            case ClassNodeState.Current:
+                _monsterCol.style.display = DisplayStyle.Flex;
+                BardChrome.Panel(_encounterCol, _art);
+                BuildMonsterPanel();
+                BuildEncounterPanel();
+                break;
+            case ClassNodeState.Cleared:
+                _preview.Stop();
+                _monsterCol.style.display = DisplayStyle.None;
+                BardChrome.Parchment(_encounterCol, _art);
+                BuildConqueredPanel(node);
+                break;
+            default: // Locked
+                _preview.Stop();
+                _monsterCol.style.display = DisplayStyle.None;
+                BardChrome.Parchment(_encounterCol, _art);
+                BuildLockedPanel(node);
+                break;
+        }
+    }
+
+    // Cleared node summary: the class medallion plus a "Conquered" heading, filling the merged middle+right
+    // area (the monster list is hidden, so this panel's flexGrow:1 takes the space).
+    private void BuildConqueredPanel(ClassNode node)
+    {
+        _encounterCol.Clear();
+        var wrap = new VisualElement
+        {
+            style = { flexGrow = 1, alignItems = Align.Center, justifyContent = Justify.Center },
+        };
+        wrap.Add(new Image
+        {
+            image = _art.ClassMedallion(node.Class),
+            style = { width = 120, height = 120, marginBottom = 16 },
+        });
+        var heading = new Label($"{BardTheme.ClassName(node.Class)} — Conquered")
+        {
+            style = { color = (Color)BardTheme.Nightwood, fontSize = 24, unityFontStyleAndWeight = FontStyle.Bold, unityTextAlign = TextAnchor.MiddleCenter },
+        };
+        BardFont.ApplyDisplay(heading);
+        wrap.Add(heading);
+        _encounterCol.Add(wrap);
+    }
+
+    // Locked node summary: a plain message, no monster content (the player hasn't reached this class yet).
+    private void BuildLockedPanel(ClassNode node)
+    {
+        _encounterCol.Clear();
+        var wrap = new VisualElement
+        {
+            style = { flexGrow = 1, alignItems = Align.Center, justifyContent = Justify.Center },
+        };
+        var message = new Label($"Reach {BardTheme.ClassName(node.Class)} to unlock")
+        {
+            style = { color = (Color)BardTheme.Nightwood, fontSize = 22, unityFontStyleAndWeight = FontStyle.Bold, unityTextAlign = TextAnchor.MiddleCenter },
+        };
+        BardFont.ApplyDisplay(message);
+        wrap.Add(message);
+        _encounterCol.Add(wrap);
     }
 
     private void BuildPlayerPanel()
@@ -443,7 +518,8 @@ public sealed class HubScreen : IScreen
 
     private void Move(int delta)
     {
-        if (_monsters.Count == 0)
+        // Cleared/Locked nodes have no monster list to scroll (they show a summary panel instead).
+        if (_path.SelectedNode.State != ClassNodeState.Current || _monsters.Count == 0)
         {
             return;
         }
@@ -455,7 +531,8 @@ public sealed class HubScreen : IScreen
 
     private void Confirm()
     {
-        if (_monsters.Count == 0)
+        // Cleared/Locked nodes have no fightable monster under the cursor.
+        if (_path.SelectedNode.State != ClassNodeState.Current || _monsters.Count == 0)
         {
             return;
         }
@@ -499,8 +576,8 @@ public sealed class HubScreen : IScreen
     [
         new(MenuAction.Up, "Menu.Common.Up", () => Move(-1)),
         new(MenuAction.Down, "Menu.Common.Down", () => Move(1)),
-        new(MenuAction.Left, "Menu.Common.Scroll", () => Move(-1)),
-        new(MenuAction.Right, "Menu.Common.Scroll", () => Move(1)),
+        new(MenuAction.Left, "Menu.Common.Scroll", () => _path.MoveSelection(-1)),
+        new(MenuAction.Right, "Menu.Common.Scroll", () => _path.MoveSelection(1)),
         new(MenuAction.Green, "Menu.Common.Confirm", Confirm),
         new(MenuAction.Red, "Menu.Common.Back", Back),
     ], false);
