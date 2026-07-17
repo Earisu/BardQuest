@@ -44,6 +44,8 @@ public sealed class BardQuestCanvas
                  ?? Resources.GetBuiltinResource<Font>("Arial.ttf");
         root.style.unityFont = font;
 
+        root.Add(new Fireflies(_art).Root);
+
         _header = new AppHeader(_art, Pop);
         root.Add(_header.Root);
         _content = new VisualElement { style = { flexGrow = 1 } };
