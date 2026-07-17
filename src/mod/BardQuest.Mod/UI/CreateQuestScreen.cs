@@ -143,6 +143,8 @@ public sealed class CreateQuestScreen : IScreen
     [
         new(MenuAction.Up, "Menu.Common.Up", () => Move(-1)),
         new(MenuAction.Down, "Menu.Common.Down", () => Move(1)),
+        new(MenuAction.Left, "Menu.Common.Scroll", () => Move(-1)),
+        new(MenuAction.Right, "Menu.Common.Scroll", () => Move(1)),
         new(MenuAction.Green, "Menu.Common.Confirm", Confirm),
         new(MenuAction.Red, "Menu.Common.Back", _canvas.Pop),
     ], false);
