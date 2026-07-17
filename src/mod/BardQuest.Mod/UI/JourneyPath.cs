@@ -22,7 +22,6 @@ public sealed class JourneyPath
 
     private readonly BardQuestArt _art;
     private readonly VisualElement[] _nodeWraps = new VisualElement[NodeCount];
-    private readonly VisualElement[] _selRings = new VisualElement[NodeCount];
 
     private IReadOnlyList<ClassNode> _nodes = [];
     private VisualElement? _currentGlow;
@@ -107,7 +106,9 @@ public sealed class JourneyPath
             {
                 position = Position.Absolute,
                 left = Length.Percent(anchor.x), top = Length.Percent(anchor.y),
-                translate = new Translate(Length.Percent(-50), Length.Percent(-50)),
+                // Horizontally centre the disc on the anchor; vertically pin the disc's CENTRE (not the whole
+                // wrap, which also holds the label/pips below) so the connector line meets the medallion middle.
+                translate = new Translate(Length.Percent(-50), -discSize / 2f),
                 alignItems = Align.Center,
             },
         };
@@ -134,57 +135,22 @@ public sealed class JourneyPath
             style = { position = Position.Relative, width = discSize, height = discSize },
         };
 
-        var disc = new Image
-        {
-            image = _art.ClassMedallion(node.Class),
-            style =
-            {
-                width = discSize, height = discSize,
-                overflow = Overflow.Hidden,
-                borderTopLeftRadius = discSize / 2f, borderTopRightRadius = discSize / 2f,
-                borderBottomLeftRadius = discSize / 2f, borderBottomRightRadius = discSize / 2f,
-                borderTopWidth = 3, borderBottomWidth = 3, borderLeftWidth = 3, borderRightWidth = 3,
-            },
-        };
-
         switch (node.State)
         {
             case ClassNodeState.Cleared:
-                SetRingColor(disc, BardTheme.Glowmoss);
-                disc.style.opacity = 1f;
-                discWrap.Add(disc);
+                discWrap.Add(BuildMedallion(node.Class, discSize));
+                discWrap.Add(BuildRing(discSize, (Color)BardTheme.Glowmoss));
                 discWrap.Add(BuildCheckBadge(discSize));
                 break;
             case ClassNodeState.Current:
-                SetRingColor(disc, BardTheme.Gilt);
-                disc.style.opacity = 1f;
-                discWrap.Add(disc);
+                discWrap.Add(BuildMedallion(node.Class, discSize));
+                discWrap.Add(BuildRing(discSize, (Color)BardTheme.Gilt));
                 break;
-            default: // Locked: dimmed, no ring, no badge — deliberately no lock glyph.
-                SetRingColor(disc, Color.clear);
-                disc.style.opacity = 0.4f;
-                disc.style.unityBackgroundImageTintColor = new Color(0.6f, 0.6f, 0.6f, 1f);
-                discWrap.Add(disc);
+            default: // Locked: grey disc with a drawn padlock, no medallion.
+                discWrap.Add(BuildLockedFace(discSize));
                 break;
         }
 
-        var selRing = new VisualElement
-        {
-            pickingMode = PickingMode.Ignore,
-            style =
-            {
-                position = Position.Absolute,
-                left = -5, top = -5, width = discSize + 10, height = discSize + 10,
-                borderTopLeftRadius = (discSize + 10) / 2f, borderTopRightRadius = (discSize + 10) / 2f,
-                borderBottomLeftRadius = (discSize + 10) / 2f, borderBottomRightRadius = (discSize + 10) / 2f,
-                borderTopWidth = 2, borderBottomWidth = 2, borderLeftWidth = 2, borderRightWidth = 2,
-                borderTopColor = (Color)BardTheme.Parchment, borderBottomColor = (Color)BardTheme.Parchment,
-                borderLeftColor = (Color)BardTheme.Parchment, borderRightColor = (Color)BardTheme.Parchment,
-                visibility = Visibility.Hidden,
-            },
-        };
-        discWrap.Add(selRing);
-        _selRings[index] = selRing;
         wrap.Add(discWrap);
 
         var label = new Label(BardTheme.ClassName(node.Class))
@@ -193,6 +159,7 @@ public sealed class JourneyPath
             {
                 color = (Color)(node.State == ClassNodeState.Locked ? BardTheme.OldWood : BardTheme.Parchment),
                 fontSize = 14, marginTop = 6, unityTextAlign = TextAnchor.MiddleCenter,
+                whiteSpace = WhiteSpace.NoWrap,
             },
         };
         BardFont.ApplyDisplay(label);
@@ -206,12 +173,95 @@ public sealed class JourneyPath
         return wrap;
     }
 
-    private static void SetRingColor(VisualElement disc, Color color)
+    private Image BuildMedallion(PlayerClass cls, float discSize)
     {
-        disc.style.borderTopColor = color;
-        disc.style.borderBottomColor = color;
-        disc.style.borderLeftColor = color;
-        disc.style.borderRightColor = color;
+        float r = discSize / 2f;
+        return new Image
+        {
+            image = _art.ClassMedallion(cls),
+            style =
+            {
+                width = discSize, height = discSize, overflow = Overflow.Hidden,
+                borderTopLeftRadius = r, borderTopRightRadius = r,
+                borderBottomLeftRadius = r, borderBottomRightRadius = r,
+            },
+        };
+    }
+
+    // The rank ring sits slightly inside the disc box so it hugs the medallion emblem rather than floating a
+    // gap outside it.
+    private static VisualElement BuildRing(float discSize, Color color)
+    {
+        float inset = discSize * 0.035f;
+        float d = discSize - (inset * 2f);
+        float r = d / 2f;
+        return new VisualElement
+        {
+            pickingMode = PickingMode.Ignore,
+            style =
+            {
+                position = Position.Absolute,
+                left = inset, top = inset, width = d, height = d,
+                borderTopLeftRadius = r, borderTopRightRadius = r,
+                borderBottomLeftRadius = r, borderBottomRightRadius = r,
+                borderTopWidth = 3, borderBottomWidth = 3, borderLeftWidth = 3, borderRightWidth = 3,
+                borderTopColor = color, borderBottomColor = color, borderLeftColor = color, borderRightColor = color,
+            },
+        };
+    }
+
+    private static VisualElement BuildLockedFace(float discSize)
+    {
+        float r = discSize / 2f;
+        var face = new VisualElement
+        {
+            style =
+            {
+                width = discSize, height = discSize,
+                alignItems = Align.Center, justifyContent = Justify.Center,
+                backgroundColor = new Color(0.34f, 0.34f, 0.36f, 1f),
+                borderTopLeftRadius = r, borderTopRightRadius = r,
+                borderBottomLeftRadius = r, borderBottomRightRadius = r,
+                borderTopWidth = 2, borderBottomWidth = 2, borderLeftWidth = 2, borderRightWidth = 2,
+                borderTopColor = (Color)BardTheme.Nightwood, borderBottomColor = (Color)BardTheme.Nightwood,
+                borderLeftColor = (Color)BardTheme.Nightwood, borderRightColor = (Color)BardTheme.Nightwood,
+            },
+        };
+        face.Add(BuildLockGlyph(discSize));
+        return face;
+    }
+
+    // A padlock drawn from primitives (the 🔒 glyph tofus on the fallback font): an open ∩ shackle (top + side
+    // borders only) overlapping a filled body block.
+    private static VisualElement BuildLockGlyph(float discSize)
+    {
+        float s = discSize / 64f;
+        var ink = new Color(0.14f, 0.14f, 0.16f, 1f);
+        var glyph = new VisualElement
+        {
+            pickingMode = PickingMode.Ignore,
+            style = { alignItems = Align.Center, justifyContent = Justify.Center },
+        };
+        glyph.Add(new VisualElement
+        {
+            style =
+            {
+                width = 13f * s, height = 10f * s, marginBottom = -2f * s,
+                borderTopWidth = 3f * s, borderLeftWidth = 3f * s, borderRightWidth = 3f * s,
+                borderTopLeftRadius = 7f * s, borderTopRightRadius = 7f * s,
+                borderTopColor = ink, borderLeftColor = ink, borderRightColor = ink,
+            },
+        });
+        glyph.Add(new VisualElement
+        {
+            style =
+            {
+                width = 20f * s, height = 15f * s, backgroundColor = ink,
+                borderTopLeftRadius = 3f * s, borderTopRightRadius = 3f * s,
+                borderBottomLeftRadius = 3f * s, borderBottomRightRadius = 3f * s,
+            },
+        });
+        return glyph;
     }
 
     // A check badge drawn from primitives (no ✓ glyph): a small green plate holding a checkmark made the
@@ -277,7 +327,6 @@ public sealed class JourneyPath
         for (int i = 0; i < NodeCount; i++)
         {
             bool selected = i == Selected;
-            _selRings[i].style.visibility = selected ? Visibility.Visible : Visibility.Hidden;
             _nodeWraps[i].style.scale = new Scale(Vector2.one * (selected ? 1.06f : 1f));
         }
     }
@@ -309,11 +358,49 @@ public sealed class JourneyPath
         p.lineWidth = 4f;
         for (int i = 0; i < NodeCount - 1; i++)
         {
-            Vector2 a = Anchors[i], b = Anchors[i + 1];
-            p.strokeColor = i < _currentIndex ? (Color)BardTheme.Glowmoss : (Color)BardTheme.OldWood;
+            var a = new Vector2(w * Anchors[i].x / 100f, h * Anchors[i].y / 100f);
+            var b = new Vector2(w * Anchors[i + 1].x / 100f, h * Anchors[i + 1].y / 100f);
+
+            // Segments among cleared nodes read as travelled (solid green); segments touching a not-yet-reached
+            // (locked) node read as a dashed dim-wood trail — the current node is at _currentIndex, everything
+            // beyond it is locked, so segment i touches a locked node once i >= _currentIndex.
+            bool travelled = i < _currentIndex;
+            p.strokeColor = travelled ? (Color)BardTheme.Glowmoss : (Color)BardTheme.OldWood;
+            if (travelled)
+            {
+                StrokeLine(p, a, b);
+            }
+            else
+            {
+                StrokeDashed(p, a, b);
+            }
+        }
+    }
+
+    private static void StrokeLine(Painter2D p, Vector2 a, Vector2 b)
+    {
+        p.BeginPath();
+        p.MoveTo(a);
+        p.LineTo(b);
+        p.Stroke();
+    }
+
+    private static void StrokeDashed(Painter2D p, Vector2 a, Vector2 b)
+    {
+        const float dash = 9f, gap = 7f;
+        float total = Vector2.Distance(a, b);
+        if (total <= 0f)
+        {
+            return;
+        }
+
+        Vector2 dir = (b - a) / total;
+        for (float pos = 0f; pos < total; pos += dash + gap)
+        {
+            float end = Mathf.Min(pos + dash, total);
             p.BeginPath();
-            p.MoveTo(new Vector2(w * a.x / 100f, h * a.y / 100f));
-            p.LineTo(new Vector2(w * b.x / 100f, h * b.y / 100f));
+            p.MoveTo(a + (dir * pos));
+            p.LineTo(a + (dir * end));
             p.Stroke();
         }
     }

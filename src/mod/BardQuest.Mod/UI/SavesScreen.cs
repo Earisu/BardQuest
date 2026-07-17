@@ -173,4 +173,6 @@ public sealed class SavesScreen : IScreen
         new(MenuAction.Green, "Menu.Common.Confirm", Confirm),
         new(MenuAction.Red, "Menu.Common.Back", _canvas.Pop),
     ], false);
+
+    public void OnPop() { }
 }

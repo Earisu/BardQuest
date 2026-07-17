@@ -334,4 +334,6 @@ public sealed class CreateQuestScreen : IScreen
         new(MenuAction.Green, "Menu.Common.Confirm", Advance),
         new(MenuAction.Red, "Menu.Common.Back", Retreat),
     ], false);
+
+    public void OnPop() { }
 }

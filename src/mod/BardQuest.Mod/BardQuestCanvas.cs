@@ -127,6 +127,7 @@ public sealed class BardQuestCanvas
 
         IScreen top = _stack[^1];
         _stack.RemoveAt(_stack.Count - 1);
+        top.OnPop();
         _content.Remove(top.Root);
         Navigator.Instance.PopScheme();
     }
