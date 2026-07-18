@@ -15,10 +15,10 @@ using MenuAction = yargpkg::YARG.Core.Input.MenuAction;
 
 namespace BardQuest.Mod.UI;
 
-// The Hub: the journey path on top, then a player-stats panel, a monster list, and an encounter panel
-// side by side. The monster list is the working set (or a single boss during a class-boss phase); the
-// encounter panel shows the highlighted monster against the player's own attribute levels plus the XP a
-// clean clear would award. Confirm launches the selected monster.
+// The Hub: the journey path on top, then a player-stats panel and a foe panel side by side. The foe is the
+// first undefeated monster in the working set (or the exclusive boss during a class-boss phase); the
+// encounter panel shows it against the player's own attribute levels plus the XP a clean clear would award.
+// Confirm launches the foe.
 public sealed class HubScreen : IScreen
 {
     private const int PanelHeight = 400;
@@ -35,13 +35,13 @@ public sealed class HubScreen : IScreen
     private readonly JourneyPath _path;
 
     private readonly VisualElement _playerCol = new();
-    private readonly VisualElement _monsterCol = new();
     private readonly VisualElement _encounterCol = new();
 
     private ActiveQuestView _view;
     private List<MonsterStatus> _monsters = [];
-    private int _selected;
-    private string _pendingSelectHash; // one-shot: restore this monster's highlight on the first Refresh
+    private MonsterStatus _target;      // the single foe: first undefeated in the working set, or the boss
+    private string _pendingSelectHash;  // one-shot: on the first Refresh after a fight, prefer the just-played
+                                        // song as the target if it is still undefeated
 
     public VisualElement Root { get; }
 
@@ -69,12 +69,11 @@ public sealed class HubScreen : IScreen
             style = { flexGrow = 1, flexDirection = FlexDirection.Column, paddingTop = 20, paddingLeft = 40, paddingRight = 40, paddingBottom = 20 },
         };
 
-        // Top-align the three columns and let each size to its own content, so the parchment panels don't
-        // stretch to the full row height (which ran their bottoms off-screen) and all three share a top edge.
+        // Top-align the two columns and let each size to its own content, so the parchment panels don't
+        // stretch to the full row height (which ran their bottoms off-screen) and both share a top edge.
         var mlower = new VisualElement { style = { flexGrow = 1, flexDirection = FlexDirection.Row, marginTop = 8, alignItems = Align.FlexStart } };
-        // All three columns share one fixed height so the panels line up and the monster list keeps a stable
-        // size regardless of how many songs (1..5) it holds.
-        _playerCol.style.width = Length.Percent(26);
+        // Both columns share one fixed height so the panels line up.
+        _playerCol.style.width = Length.Percent(38);
         _playerCol.style.height = PanelHeight;
         _playerCol.style.marginRight = 16;
         _playerCol.style.paddingTop = 24;
@@ -82,15 +81,6 @@ public sealed class HubScreen : IScreen
         _playerCol.style.paddingLeft = 22;
         _playerCol.style.paddingRight = 22;
         BardChrome.Parchment(_playerCol, _art);
-
-        _monsterCol.style.width = Length.Percent(30);
-        _monsterCol.style.height = PanelHeight;
-        _monsterCol.style.marginRight = 16;
-        _monsterCol.style.paddingTop = 24;
-        _monsterCol.style.paddingBottom = 24;
-        _monsterCol.style.paddingLeft = 22;
-        _monsterCol.style.paddingRight = 22;
-        BardChrome.Parchment(_monsterCol, _art);
 
         _encounterCol.style.flexGrow = 1;
         _encounterCol.style.height = PanelHeight;
@@ -101,7 +91,6 @@ public sealed class HubScreen : IScreen
         BardChrome.Panel(_encounterCol, _art);
 
         mlower.Add(_playerCol);
-        mlower.Add(_monsterCol);
         mlower.Add(_encounterCol);
 
         Root.Add(_path.Root);
@@ -118,60 +107,66 @@ public sealed class HubScreen : IScreen
             ? [_view.Boss]
             : [.. _view.WorkingSet];
 
-        // Restore the highlight to a specific monster (the one just fought), like YARG's library keeps its
-        // cursor across a song. One-shot; falls back to the clamped index if that monster is gone (e.g. the
-        // working set redelivered or collapsed to a boss/Elite).
-        if (_pendingSelectHash != null)
-        {
-            int idx = _monsters.FindIndex(m => string.Equals(m.Hash, _pendingSelectHash, StringComparison.OrdinalIgnoreCase));
-            if (idx >= 0)
-            {
-                _selected = idx;
-            }
+        _target = ResolveTarget();
+        _pendingSelectHash = null; // one-shot consumed
 
-            _pendingSelectHash = null;
-        }
-
-        _selected = Mathf.Clamp(_selected, 0, Math.Max(0, _monsters.Count - 1));
         _path.Build(_view.Class, _view.Subrank);
         BuildPlayerPanel();
-
-        // Build() always lands the selection on the node whose State is Current (the player's own class), so
-        // the working-set monster list/encounter is always the right initial content here.
-        BuildMonsterPanel();
         BuildEncounterPanel();
     }
 
+    // The foe under the cursor: the exclusive boss at a class-boss phase; otherwise the first undefeated
+    // monster in the working set. If the just-fought song (pendingSelectHash) is still undefeated, prefer it
+    // so a failed attempt re-presents the same foe rather than skipping ahead.
+    private MonsterStatus ResolveTarget()
+    {
+        if (_view.AtClassBoss && _view.Boss != null)
+        {
+            return _view.Boss;
+        }
+
+        if (_pendingSelectHash != null)
+        {
+            MonsterStatus just = _monsters.FirstOrDefault(
+                m => !m.Defeated && string.Equals(m.Hash, _pendingSelectHash, StringComparison.OrdinalIgnoreCase));
+            if (just != null)
+            {
+                return just;
+            }
+        }
+
+        return _monsters.FirstOrDefault(m => !m.Defeated) ?? _monsters.FirstOrDefault();
+    }
+
     // Fires only from ◄►, never from Refresh (JourneyPath.Build sets its Selected field directly rather than
-    // through MoveSelection). Swaps the monster list + encounter for a summary panel on non-current nodes.
+    // through MoveSelection). Swaps the duel for a summary panel on non-current nodes.
     private void OnJourneySelectionChanged()
     {
         ClassNode node = _path.SelectedNode;
         switch (node.State)
         {
             case ClassNodeState.Current:
-                _monsterCol.style.display = DisplayStyle.Flex;
+                _playerCol.style.display = DisplayStyle.Flex;
                 BardChrome.Panel(_encounterCol, _art);
-                BuildMonsterPanel();
                 BuildEncounterPanel();
                 break;
             case ClassNodeState.Cleared:
                 _preview.Stop();
-                _monsterCol.style.display = DisplayStyle.None;
+                _playerCol.style.display = DisplayStyle.None;
                 BardChrome.Parchment(_encounterCol, _art);
                 BuildConqueredPanel(node);
                 break;
             default: // Locked
                 _preview.Stop();
-                _monsterCol.style.display = DisplayStyle.None;
+                _playerCol.style.display = DisplayStyle.None;
                 BardChrome.Parchment(_encounterCol, _art);
                 BuildLockedPanel(node);
                 break;
         }
     }
 
-    // Cleared node summary: the class medallion plus a "Conquered" heading, filling the merged middle+right
-    // area (the monster list is hidden, so this panel's flexGrow:1 takes the space).
+    // Cleared node summary: the class medallion plus a "Conquered" heading, filling the row (the YOU panel
+    // is hidden, so this panel's flexGrow:1 takes the space).
     private void BuildConqueredPanel(ClassNode node)
     {
         _encounterCol.Clear();
@@ -313,75 +308,10 @@ public sealed class HubScreen : IScreen
         return row;
     }
 
-    private void BuildMonsterPanel()
-    {
-        _monsterCol.Clear();
-
-        string section = _view.AtClassBoss ? "— CLASS BOSS —"
-            : _view.AtMiniBoss ? "— ELITE —"
-            : $"— {BardTheme.ClassName(_view.Class)} {BardTheme.Roman(_view.Subrank)} · Monsters —";
-        var sectionBanner = new VisualElement
-        {
-            style = { height = 40, marginBottom = 10, alignItems = Align.Center, justifyContent = Justify.Center },
-        };
-        BardChrome.BannerSecondary(sectionBanner, _art, 40);
-        sectionBanner.Add(new Label(section)
-        {
-            style = { color = (Color)BardTheme.Parchment, fontSize = 16, unityFontStyleAndWeight = FontStyle.Bold },
-        });
-        _monsterCol.Add(sectionBanner);
-
-        for (int i = 0; i < _monsters.Count; i++)
-        {
-            _monsterCol.Add(BuildRow(_monsters[i], i));
-        }
-    }
-
-    private VisualElement BuildRow(MonsterStatus m, int index)
-    {
-        SongEnricher.SongInfo? info = _enricher.Lookup(m.Hash);
-        var row = new VisualElement
-        {
-            style =
-            {
-                flexDirection = FlexDirection.Row, alignItems = Align.Center,
-                paddingTop = 6, paddingBottom = 6, paddingLeft = 8, marginBottom = 4,
-                backgroundColor = index == _selected ? (Color)BardTheme.OldWood : (Color)BardTheme.Mossdeep,
-            },
-        };
-        row.Add(new Label(info?.Title ?? m.Hash[..Math.Min(8, m.Hash.Length)])
-        {
-            style = { color = (Color)BardTheme.Parchment, fontSize = 18, flexGrow = 1 },
-        });
-        row.Add(new Image
-        {
-            image = _art.RankBadge(m.Profile.ToRank()),
-            style = { width = 30, height = 30, marginRight = 8 },
-        });
-        row.Add(new Label(Marker(m))
-        {
-            style = { color = (Color)(m.Defeated ? BardTheme.Glowmoss : BardTheme.Ember), fontSize = 16 },
-        });
-        return row;
-    }
-
-    private static string Marker(MonsterStatus m)
-    {
-        string type = m.Type switch
-        {
-            MonsterType.Elite => "Elite",
-            MonsterType.Boss => "Boss",
-            MonsterType.Rare => "Rare",
-            _ => "",
-        };
-        string state = m.Defeated ? "cleared" : "";
-        return string.Join(" ", new[] { type, state }.Where(s => s.Length > 0));
-    }
-
     private void BuildEncounterPanel()
     {
         _encounterCol.Clear();
-        if (_monsters.Count == 0)
+        if (_target == null)
         {
             _preview.Stop();
             _encounterCol.Add(new Label(_view.IsComplete ? "The quest is complete." : "No monsters delivered.")
@@ -391,7 +321,7 @@ public sealed class HubScreen : IScreen
             return;
         }
 
-        MonsterStatus m = _monsters[_selected];
+        MonsterStatus m = _target;
         SongEnricher.SongInfo? info = _enricher.Lookup(m.Hash);
 
         // Preview the highlighted song, like YARG's Music Library. No-op if it is already previewing this
@@ -516,52 +446,23 @@ public sealed class HubScreen : IScreen
         return wrap;
     }
 
-    private void Move(int delta)
-    {
-        // Cleared/Locked nodes have no monster list to scroll (they show a summary panel instead).
-        if (_path.SelectedNode.State != ClassNodeState.Current || _monsters.Count == 0)
-        {
-            return;
-        }
-
-        _selected = (_selected + delta + _monsters.Count) % _monsters.Count;
-        BuildMonsterPanel();
-        BuildEncounterPanel();
-    }
-
     private void Confirm()
     {
-        // Cleared/Locked nodes have no fightable monster under the cursor.
-        if (_path.SelectedNode.State != ClassNodeState.Current || _monsters.Count == 0)
+        // Cleared/Locked nodes have no fightable foe; a class other than the current one is browse-only.
+        if (_path.SelectedNode.State != ClassNodeState.Current || _target == null || _target.Defeated)
         {
             return;
         }
 
-        MonsterStatus target = _monsters[_selected];
+        string hash = _target.Hash;
 
-        // A cleared monster cannot be re-fought: no replay, so it can never re-award XP for a song already
-        // beaten. Confirm is a no-op on it (the detail panel shows it as cleared instead of a fight prompt).
-        if (target.Defeated)
-        {
-            return;
-        }
-
-        string hash = target.Hash;
-
-        // Guard BEFORE tearing anything down: if this monster's song has left the library (a stale rating
-        // cache), Launch would bail with no scene load, leaving the canvas on an input-less guard scheme —
-        // a soft-lock. Bail here instead, keeping the Hub fully interactive.
         if (!_controller.CanLaunch(hash))
         {
             ModLog.Warn($"HubScreen: song {hash} is no longer in the library; not launching.");
             return;
         }
 
-        _preview.Stop(); // silence the preview so it can't bleed into gameplay
-
-        // Cleanly tear our screens off YARG's Navigator and push a music-suppressing guard so the menu
-        // track never bleeds over the song (see PrepareForLaunch). On return, BardQuestManager records the
-        // play and re-opens this Hub for the quest automatically — no re-entering the mod by hand.
+        _preview.Stop();
         _canvas.PrepareForLaunch();
         _controller.Launch(_quest, hash);
     }
@@ -574,8 +475,6 @@ public sealed class HubScreen : IScreen
 
     public NavigationScheme BuildScheme() => new(
     [
-        new(MenuAction.Up, "Menu.Common.Up", () => Move(-1)),
-        new(MenuAction.Down, "Menu.Common.Down", () => Move(1)),
         new(MenuAction.Left, "Menu.Common.Scroll", () => _path.MoveSelection(-1)),
         new(MenuAction.Right, "Menu.Common.Scroll", () => _path.MoveSelection(1)),
         new(MenuAction.Green, "Menu.Common.Confirm", Confirm),
