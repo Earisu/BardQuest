@@ -119,10 +119,7 @@ public sealed class BardQuestManager : MonoBehaviour
             openCreate: ShowCreate));
     }
 
-    private void ShowCreate()
-    {
-        _canvas.Push(new UI.CreateQuestScreen(_canvas, Controller, openHub: ShowHub));
-    }
+    private void ShowCreate() => _canvas.Push(new UI.CreateQuestScreen(_canvas, Controller, _art, openHub: ShowHub));
 
     private void ShowHub(DomainQuest quest) => ShowHub(quest, null);
 

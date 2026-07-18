@@ -8,6 +8,12 @@ BardQuest's own code is licensed under the [MIT License](LICENSE). It builds
 against and vendors third-party components under their own licenses — see
 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
 
+## Credits
+
+The in-game UI is set in **Cinzel** by Natanael Gama, licensed under the SIL
+Open Font License 1.1 (see
+[`src/mod/BardQuest.Mod/Art/fonts/OFL.txt`](src/mod/BardQuest.Mod/Art/fonts/OFL.txt)).
+
 ## Releasing
 
 CI runs on every push/PR (`.github/workflows/ci.yml`): the YARG-free unit tests plus a

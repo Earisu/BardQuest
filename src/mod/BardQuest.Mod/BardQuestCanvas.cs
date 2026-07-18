@@ -13,9 +13,11 @@ namespace BardQuest.Mod;
 public sealed class BardQuestCanvas
 {
     private readonly UIDocument _doc;
+    private readonly AppHeader _header;
     private readonly VisualElement _content;
     private readonly List<IScreen> _stack = [];
     private readonly BardQuestArt _art;
+    private readonly Fireflies _fireflies;
     private bool _visible;
 
     public BardQuestCanvas(BardQuestArt art)
@@ -43,9 +45,15 @@ public sealed class BardQuestCanvas
                  ?? Resources.GetBuiltinResource<Font>("Arial.ttf");
         root.style.unityFont = font;
 
+        _fireflies = new Fireflies(_art);
+        root.Add(_fireflies.Root);
+
+        _header = new AppHeader(_art, Pop);
+        root.Add(_header.Root);
         _content = new VisualElement { style = { flexGrow = 1 } };
         root.Add(_content);
         root.style.display = DisplayStyle.None;
+        _fireflies.SetRunning(false); // start paused; the surface opens hidden, Show() resumes it
     }
 
     public void ShowRoot(IScreen root)
@@ -69,6 +77,7 @@ public sealed class BardQuestCanvas
         }
 
         Navigator.Instance.PushScheme(screen.BuildScheme());
+        _header.SetTitle(screen.Title);
     }
 
     public void Pop()
@@ -81,6 +90,7 @@ public sealed class BardQuestCanvas
         else
         {
             _stack[^1].Root.style.display = DisplayStyle.Flex;
+            _header.SetTitle(_stack[^1].Title);
         }
     }
 
@@ -104,7 +114,7 @@ public sealed class BardQuestCanvas
             PopInternal();
         }
 
-        Navigator.Instance.PushScheme(new NavigationScheme(new List<NavigationScheme.Entry>(), false));
+        Navigator.Instance.PushScheme(new NavigationScheme([], false));
     }
 
     // Hide the canvas as the launched Gameplay scene comes up, so the DontDestroyOnLoad UIDocument does
@@ -120,6 +130,7 @@ public sealed class BardQuestCanvas
 
         IScreen top = _stack[^1];
         _stack.RemoveAt(_stack.Count - 1);
+        top.OnPop();
         _content.Remove(top.Root);
         Navigator.Instance.PopScheme();
     }
@@ -133,6 +144,7 @@ public sealed class BardQuestCanvas
 
         _doc.rootVisualElement.style.display = DisplayStyle.Flex;
         _visible = true;
+        _fireflies.SetRunning(true);
     }
 
     private void Hide()
@@ -144,5 +156,6 @@ public sealed class BardQuestCanvas
 
         _doc.rootVisualElement.style.display = DisplayStyle.None;
         _visible = false;
+        _fireflies.SetRunning(false);
     }
 }

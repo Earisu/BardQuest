@@ -17,6 +17,8 @@
     <Reference Include="UnityEngine.CoreModule" HintPath="$(YargManaged)/UnityEngine.CoreModule.dll" Private="false" />
     <Reference Include="UnityEngine.UIElementsModule" HintPath="$(YargManaged)/UnityEngine.UIElementsModule.dll" Private="false" />
     <Reference Include="UnityEngine.TextRenderingModule" HintPath="$(YargManaged)/UnityEngine.TextRenderingModule.dll" Private="false" />
+    <Reference Include="UnityEngine.TextCoreTextEngineModule" HintPath="$(YargManaged)/UnityEngine.TextCoreTextEngineModule.dll" Private="false" />
+    <Reference Include="UnityEngine.TextCoreFontEngineModule" HintPath="$(YargManaged)/UnityEngine.TextCoreFontEngineModule.dll" Private="false" />
     <Reference Include="UnityEngine.ImageConversionModule" HintPath="$(YargManaged)/UnityEngine.ImageConversionModule.dll" Private="false" />
     <Reference Include="Unity.InputSystem" HintPath="$(YargManaged)/Unity.InputSystem.dll" Private="false" />
     <Reference Include="Unity.TextMeshPro" HintPath="$(YargManaged)/Unity.TextMeshPro.dll" Private="false" />
