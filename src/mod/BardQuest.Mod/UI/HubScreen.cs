@@ -21,7 +21,7 @@ namespace BardQuest.Mod.UI;
 // Confirm launches the foe.
 public sealed class HubScreen : IScreen
 {
-    private const int PanelHeight = 400;
+    private const int PanelHeight = 620;
 
     private static readonly Attribute[] Axes =
         [Attribute.Strength, Attribute.Endurance, Attribute.Technique, Attribute.Agility, Attribute.Dexterity];
@@ -47,6 +47,8 @@ public sealed class HubScreen : IScreen
 
     public string Title => "Quest Hub";
 
+    public bool ShowsAppHeader => false;
+
     public HubScreen(
         BardQuestCanvas canvas, QuestController controller, SongEnricher enricher, SongPreviewPlayer preview,
         BardQuestArt art, DomainQuest quest, string initialSelectionHash = null)
@@ -71,29 +73,43 @@ public sealed class HubScreen : IScreen
 
         // Top-align the two columns and let each size to its own content, so the parchment panels don't
         // stretch to the full row height (which ran their bottoms off-screen) and both share a top edge.
-        var mlower = new VisualElement { style = { flexGrow = 1, flexDirection = FlexDirection.Row, marginTop = 8, alignItems = Align.FlexStart } };
-        // Both columns share one fixed height so the panels line up.
-        _playerCol.style.width = Length.Percent(38);
+        // Push the body down a little and let the panels run lower, filling the space the journey band leaves.
+        var mlower = new VisualElement { style = { flexGrow = 1, flexDirection = FlexDirection.Row, marginTop = 44, alignItems = Align.FlexStart } };
+        // Both columns share one fixed height so the panels line up. YOU wears the ornate Panel frame (the
+        // wider "song-list" column), the FOE its parchment detail sheet.
+        _playerCol.style.width = Length.Percent(58);
         _playerCol.style.height = PanelHeight;
         _playerCol.style.marginRight = 16;
-        _playerCol.style.paddingTop = 24;
-        _playerCol.style.paddingBottom = 24;
-        _playerCol.style.paddingLeft = 22;
-        _playerCol.style.paddingRight = 22;
-        BardChrome.Parchment(_playerCol, _art);
+        _playerCol.style.paddingTop = 32;
+        _playerCol.style.paddingBottom = 32;
+        _playerCol.style.paddingLeft = 34;
+        _playerCol.style.paddingRight = 34;
+        BardChrome.Panel(_playerCol, _art);
 
         _encounterCol.style.flexGrow = 1;
         _encounterCol.style.height = PanelHeight;
-        _encounterCol.style.paddingTop = 32;
-        _encounterCol.style.paddingBottom = 32;
-        _encounterCol.style.paddingLeft = 40;
-        _encounterCol.style.paddingRight = 40;
-        BardChrome.Panel(_encounterCol, _art);
+        _encounterCol.style.paddingTop = 28;
+        _encounterCol.style.paddingBottom = 28;
+        _encounterCol.style.paddingLeft = 30;
+        _encounterCol.style.paddingRight = 30;
+        BardChrome.Parchment(_encounterCol, _art);
 
         mlower.Add(_playerCol);
         mlower.Add(_encounterCol);
 
-        Root.Add(_path.Root);
+        // The Hub's own header (the app header is suppressed for this screen): the small logo mark pinned left,
+        // the journey path filling the rest — the journey becomes the header.
+        var band = new VisualElement { style = { flexDirection = FlexDirection.Row, alignItems = Align.Center, flexShrink = 0 } };
+        band.Add(new Image
+        {
+            image = _art.LogoMark(),
+            pickingMode = PickingMode.Ignore,
+            style = { width = 76, height = 76, marginRight = 20, flexShrink = 0 },
+        });
+        _path.Root.style.flexGrow = 1; // journey stretches across the band to the right of the logo
+        band.Add(_path.Root);
+
+        Root.Add(band);
         Root.Add(mlower);
 
         Refresh();
@@ -147,7 +163,7 @@ public sealed class HubScreen : IScreen
         {
             case ClassNodeState.Current:
                 _playerCol.style.display = DisplayStyle.Flex;
-                BardChrome.Panel(_encounterCol, _art);
+                BardChrome.Parchment(_encounterCol, _art);
                 BuildEncounterPanel();
                 break;
             case ClassNodeState.Cleared:

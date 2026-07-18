@@ -56,6 +56,8 @@ public sealed class CreateQuestScreen : IScreen
 
     public string Title => "New Quest";
 
+    public bool ShowsAppHeader => true;
+
     public CreateQuestScreen(BardQuestCanvas canvas, QuestController controller, BardQuestArt art, Action<DomainQuest> openHub)
     {
         _canvas = canvas;

@@ -7,6 +7,7 @@ draws a tinted placeholder, so the UI is usable without it.
 
 Expected filenames (all lowercase):
 - `logo.png`, `app_icon.png`, `backdrop.png` (1920x1080), `panel_frame.png`, `card_parchment.png`
+- Hub header logo mark: `logo_mark.png` (small, text-less BardQuest logo; square, transparent)
 - `banner_primary.png`, `banner_secondary.png`
 - Monster frames: `monster_regular.png`, `monster_elite.png`, `monster_boss.png`, `monster_rare.png`
 - Class medallions: `class_busker.png`, `class_minstrel.png`, `class_troubadour.png`, `class_bard.png`, `class_skald.png`, `class_legendweaver.png`

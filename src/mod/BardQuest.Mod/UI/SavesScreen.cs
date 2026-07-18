@@ -34,6 +34,8 @@ public sealed class SavesScreen : IScreen
 
     public string Title => "Your Quests";
 
+    public bool ShowsAppHeader => true;
+
     public SavesScreen(
         BardQuestCanvas canvas, QuestController controller, BardQuestArt art,
         Action<DomainQuest> openHub, Action openCreate)

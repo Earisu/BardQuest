@@ -48,7 +48,7 @@ public sealed class BardQuestCanvas
         _fireflies = new Fireflies(_art);
         root.Add(_fireflies.Root);
 
-        _header = new AppHeader(_art, Pop);
+        _header = new AppHeader(_art);
         root.Add(_header.Root);
         _content = new VisualElement { style = { flexGrow = 1 } };
         root.Add(_content);
@@ -78,6 +78,7 @@ public sealed class BardQuestCanvas
 
         Navigator.Instance.PushScheme(screen.BuildScheme());
         _header.SetTitle(screen.Title);
+        _header.Root.style.display = screen.ShowsAppHeader ? DisplayStyle.Flex : DisplayStyle.None;
     }
 
     public void Pop()
@@ -91,6 +92,7 @@ public sealed class BardQuestCanvas
         {
             _stack[^1].Root.style.display = DisplayStyle.Flex;
             _header.SetTitle(_stack[^1].Title);
+            _header.Root.style.display = _stack[^1].ShowsAppHeader ? DisplayStyle.Flex : DisplayStyle.None;
         }
     }
 

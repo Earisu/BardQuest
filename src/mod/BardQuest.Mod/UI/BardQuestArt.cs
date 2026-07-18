@@ -29,6 +29,9 @@ public sealed class BardQuestArt
     public Texture2D BannerPrimary() => Get("banner_primary", 0xD9A441);
     public Texture2D BannerSecondary() => Get("banner_secondary", 0x6B4A2F);
     public Texture2D Logo() => Get("logo", 0x4ADE80);
+
+    // The small text-less logo mark for the Hub's header band (top-left). Tinted placeholder until the PNG lands.
+    public Texture2D LogoMark() => Get("logo_mark", 0x4ADE80);
     public Texture2D Glow() => Get("glow", 0xFFF3C0);
     public Texture2D SelectGlow() => Get("select_glow", 0xFFD868);
     public Texture2D BeginGlow() => Get("begin_glow", 0xFFD868);
