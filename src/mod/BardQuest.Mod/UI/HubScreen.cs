@@ -7,6 +7,7 @@ using BardQuest.Mod.Quest;
 using UnityEngine;
 using UnityEngine.UIElements;
 
+using YARG.Menu.Data;
 using YARG.Menu.Navigation;
 
 using Attribute = BardQuest.Domain.Ratings.Attribute;
@@ -22,6 +23,8 @@ public sealed class HubScreen : IScreen
 {
     private static readonly Attribute[] Axes =
         [Attribute.Strength, Attribute.Endurance, Attribute.Technique, Attribute.Agility, Attribute.Dexterity];
+
+    private static Texture2D _dividerTex;
 
     private readonly BardQuestCanvas _canvas;
     private readonly QuestController _controller;
@@ -171,71 +174,120 @@ public sealed class HubScreen : IScreen
         }
     }
 
-    // Zone A — the player: class/rank medallion (top-left), class + subrank, the XP-to-rank bar, and the five
-    // attribute levels as plain icon + value.
+    // Zone A — the player, split into six parts (the class, then the five attributes) separated by vertical
+    // dividers that fade out toward their top and bottom edges.
     private void BuildHeader()
     {
         _header.Clear();
-        var row = new VisualElement { style = { flexDirection = FlexDirection.Row, alignItems = Align.Center } };
+        var row = new VisualElement { style = { flexDirection = FlexDirection.Row, alignItems = Align.Stretch, justifyContent = Justify.Center } };
 
-        row.Add(new Image
-        {
-            image = _art.ClassMedallion(_view.Class),
-            pickingMode = PickingMode.Ignore,
-            style = { width = 84, height = 84, marginRight = 18, flexShrink = 0 },
-        });
-
-        var idCol = new VisualElement { style = { flexGrow = 1, justifyContent = Justify.Center } };
-        var classLabel = new Label(_view.IsComplete
-            ? "LEGENDWEAVER"
-            : $"{BardTheme.ClassName(_view.Class)} {BardTheme.Roman(_view.Subrank)}")
-        {
-            style = { color = (Color)BardTheme.Gilt, fontSize = 30, letterSpacing = 2, unityFontStyleAndWeight = FontStyle.Bold },
-        };
-        BardFont.ApplyDisplay(classLabel);
-        idCol.Add(classLabel);
-        idCol.Add(ClassXpBar());
-        row.Add(idCol);
-
-        var attrRow = new VisualElement { style = { flexDirection = FlexDirection.Row, alignItems = Align.Center, flexShrink = 0 } };
+        row.Add(ClassPart());
+        var curve = LevelCurve.ForPace(_quest.Pace);
         foreach (Attribute a in Axes)
         {
-            attrRow.Add(AttributeCell(a));
+            row.Add(Divider());
+            row.Add(AttributePart(a, curve));
         }
 
-        row.Add(attrRow);
         _header.Add(row);
     }
 
-    // Score progress within the current class band — the one surviving StatBar.
-    private VisualElement ClassXpBar()
+    // Part 1: the class medallion + name, its global XP-to-rank bar, and the percentage beneath.
+    private VisualElement ClassPart()
     {
         (double lo, double hi) = ClassDerivation.Range(_view.Class);
         float frac = hi > lo ? Mathf.Clamp01((float)((_view.Profile.Score - lo) / (hi - lo))) : 1f;
-        var wrap = new VisualElement { style = { maxWidth = 340, marginTop = 6 } };
-        wrap.Add(new Label($"{Mathf.RoundToInt(frac * 100f)}% to next rank")
+
+        var part = new VisualElement { style = { flexGrow = 1, flexShrink = 1, alignItems = Align.Center, justifyContent = Justify.Center, paddingLeft = 10, paddingRight = 10 } };
+
+        var idRow = new VisualElement { style = { flexDirection = FlexDirection.Row, alignItems = Align.Center, marginBottom = 8 } };
+        idRow.Add(new Image
         {
-            style = { color = (Color)BardTheme.Parchment, fontSize = 12, marginBottom = 3 },
+            image = _art.ClassMedallion(_view.Class),
+            pickingMode = PickingMode.Ignore,
+            style = { width = 56, height = 56, marginRight = 10, flexShrink = 0 },
         });
-        wrap.Add(StatBar.Build(_art, frac, (Color)BardTheme.Glowmoss, 12f));
-        return wrap;
+        var name = new Label(_view.IsComplete ? "LEGENDWEAVER" : $"{BardTheme.ClassName(_view.Class)} {BardTheme.Roman(_view.Subrank)}")
+        {
+            style = { color = (Color)BardTheme.Gilt, fontSize = 20, unityFontStyleAndWeight = FontStyle.Bold, whiteSpace = WhiteSpace.Normal, flexShrink = 1 },
+        };
+        BardFont.ApplyDisplay(name);
+        idRow.Add(name);
+        part.Add(idRow);
+
+        VisualElement bar = StatBar.Build(_art, frac, (Color)BardTheme.Glowmoss, 9f);
+        bar.style.width = 150;
+        part.Add(bar);
+        part.Add(new Label($"{Mathf.RoundToInt(frac * 100f)}% to next rank")
+        {
+            style = { color = (Color)BardTheme.Parchment, fontSize = 12, marginTop = 4 },
+        });
+        return part;
     }
 
-    // One attribute as a plain icon + its level value (no ring).
-    private VisualElement AttributeCell(Attribute a)
+    // Parts 2-6: one attribute — its icon with the level beside it, the XP bar under, and current/next XP below.
+    private VisualElement AttributePart(Attribute a, LevelCurve curve)
     {
-        var cell = new VisualElement { style = { alignItems = Align.Center, marginLeft = 18 } };
-        cell.Add(new Image
+        AttributeState state = _view.Profile[a];
+        (_, double into, double needed) = curve.Progress(state.Xp);
+        float frac = needed > 0 ? Mathf.Clamp01((float)(into / needed)) : 0f;
+
+        var part = new VisualElement { style = { flexGrow = 1, flexShrink = 1, alignItems = Align.Center, justifyContent = Justify.Center, paddingLeft = 8, paddingRight = 8 } };
+
+        var iconRow = new VisualElement { style = { flexDirection = FlexDirection.Row, alignItems = Align.Center, marginBottom = 8 } };
+        iconRow.Add(new Image
         {
             image = _art.AttributeIcon(a),
             pickingMode = PickingMode.Ignore,
-            style = { width = 40, height = 40 },
+            style = { width = 42, height = 42, marginRight = 8 },
         });
-        cell.Add(new Label(_view.Profile[a].Level.ToString())
+        iconRow.Add(new Label(state.Level.ToString())
         {
-            style = { color = BardTheme.AxisColor(a), fontSize = 18, unityFontStyleAndWeight = FontStyle.Bold, marginTop = 2 },
+            style = { color = BardTheme.AxisColor(a), fontSize = 26, unityFontStyleAndWeight = FontStyle.Bold },
         });
-        return cell;
+        part.Add(iconRow);
+
+        VisualElement bar = StatBar.Build(_art, frac, BardTheme.AxisColor(a), 9f);
+        bar.style.width = 120;
+        part.Add(bar);
+        part.Add(new Label($"{Mathf.RoundToInt((float)into)}/{Mathf.RoundToInt((float)needed)}")
+        {
+            style = { color = (Color)BardTheme.Parchment, fontSize = 12, marginTop = 4 },
+        });
+        return part;
+    }
+
+    // A vertical divider between header parts, fading out toward its top and bottom edges (a generated gradient
+    // texture stretched to the header's height).
+    private static VisualElement Divider() => new()
+    {
+        style =
+        {
+            width = 2, marginLeft = 10, marginRight = 10, flexShrink = 0,
+            backgroundImage = new StyleBackground(Background.FromTexture2D(DividerTexture())),
+        },
+    };
+
+    private static Texture2D DividerTexture()
+    {
+        if (_dividerTex != null)
+        {
+            return _dividerTex;
+        }
+
+        const int h = 64;
+        var tex = new Texture2D(1, h, TextureFormat.RGBA32, false);
+        var px = new Color32[h];
+        for (int y = 0; y < h; y++)
+        {
+            float a = Mathf.Sin(y / (float)(h - 1) * Mathf.PI); // 0 at both ends, 1 in the middle
+            px[y] = new Color32(214, 183, 122, (byte)(a * 150f));
+        }
+
+        tex.SetPixels32(px);
+        tex.Apply();
+        _dividerTex = tex;
+        return tex;
     }
 
     // Zone B — the wave: up to five selectable foe rows (or the lone boss). Light text (the frame's interior
@@ -326,9 +378,9 @@ public sealed class HubScreen : IScreen
         _ => "REGULAR",
     };
 
-    // Zone C — STUB. Task 4 replaces this with the full detail card (album/frame, shield rank + type, plain
-    // demand cells, green FIGHT pip). For now it names the selected foe and shows the FIGHT plate so the
-    // Green binding is verifiable. The Panel interior is light parchment, so its text is dark.
+    // Zone C — the selected foe: a big album/monster-frame pinned top-left, with title, artist, shield rank +
+    // type, and the five demands (icon + 10 pills) in the column to its right; the green FIGHT plate pinned at
+    // the bottom. The Panel interior is light parchment, so its text is dark.
     private void BuildDetail()
     {
         _detailCol.Clear();
@@ -343,25 +395,206 @@ public sealed class HubScreen : IScreen
         }
 
         SongEnricher.SongInfo? info = _enricher.Lookup(m.Hash);
+
+        var topRow = new VisualElement { style = { flexDirection = FlexDirection.Row, flexShrink = 0 } };
+
+        // Big album pinned top-left, in the monster frame. The detail column's padding already insets it past
+        // the Panel's leafy corners, so it clears the vines.
+        const float frameSize = 480f;
+        var frameStack = new VisualElement { style = { width = frameSize, height = frameSize, flexShrink = 0, alignSelf = Align.FlexStart } };
+        var album = new Image
+        {
+            image = info?.Album,
+            // YARGImage decodes bottom-up; flip vertically. Inset to the frame art's transparent window (~65%).
+            style = { position = Position.Absolute, left = 84, top = 84, width = 312, height = 312 },
+        };
+        if (info?.Album != null)
+        {
+            album.style.scale = new Scale(new Vector2(1f, -1f));
+        }
+        else
+        {
+            album.style.backgroundColor = (Color)BardTheme.Nightwood;
+        }
+
+        frameStack.Add(album);
+        frameStack.Add(new Image
+        {
+            image = _art.MonsterFrame(m.Type),
+            style = { position = Position.Absolute, left = 0, top = 0, width = frameSize, height = frameSize },
+        });
+        topRow.Add(frameStack);
+
+        // Info column to the right of the album, centered against the tall album: title, artist, rank + type,
+        // then the demand pills.
+        var infoCol = new VisualElement { style = { flexGrow = 1, flexShrink = 1, marginLeft = 24, justifyContent = Justify.Center, alignItems = Align.Center } };
         var title = new Label(info?.Title ?? "Unknown")
         {
-            style = { color = (Color)BardTheme.Nightwood, fontSize = 24, unityFontStyleAndWeight = FontStyle.Bold, unityTextAlign = TextAnchor.MiddleCenter, whiteSpace = WhiteSpace.Normal },
+            style = { color = (Color)BardTheme.Nightwood, fontSize = 26, unityFontStyleAndWeight = FontStyle.Bold, whiteSpace = WhiteSpace.Normal, unityTextAlign = TextAnchor.MiddleCenter },
         };
         BardFont.ApplyDisplay(title);
-        _detailCol.Add(title);
-        _detailCol.Add(new Label(info?.Artist ?? "")
+        infoCol.Add(title);
+        infoCol.Add(new Label(info?.Artist ?? "")
         {
-            style = { color = (Color)BardTheme.OldWood, fontSize = 16, unityTextAlign = TextAnchor.MiddleCenter, marginBottom = 20 },
+            style = { color = (Color)BardTheme.OldWood, fontSize = 16, whiteSpace = WhiteSpace.Normal, unityTextAlign = TextAnchor.MiddleCenter, marginBottom = 10 },
         });
 
-        var cta = new VisualElement { style = { height = 60, marginTop = 16, alignItems = Align.Center, justifyContent = Justify.Center } };
-        BardChrome.BannerPrimary(cta, _art, 60);
+        var meta = new VisualElement { style = { flexDirection = FlexDirection.Column, alignItems = Align.Center, marginBottom = 4 } };
+        meta.Add(new Image
+        {
+            image = _art.RankBadge(m.Profile.ToRank()),
+            pickingMode = PickingMode.Ignore,
+            style = { width = 48, height = 48, flexShrink = 0 },
+        });
+        meta.Add(new Label(TypeTag(m.Type))
+        {
+            style = { color = (Color)BardTheme.Ember, fontSize = 16, unityFontStyleAndWeight = FontStyle.Bold, marginTop = 4 },
+        });
+        infoCol.Add(meta);
+
+        // The demands live in a frame whose corners round INWARD (concave), drawn with Painter2D — a CSS
+        // borderRadius only rounds outward. An inner padded box holds the pills; the outer element sizes to it
+        // and strokes the concave border around the full box.
+        var attrFrame = new VisualElement { style = { marginTop = 12 } };
+        attrFrame.generateVisualContent += ctx => DrawInwardBorder(ctx, (Color)BardTheme.OldWood, 2.5f, 14f);
+        var attrInner = new VisualElement { style = { paddingTop = 10, paddingBottom = 12, paddingLeft = 18, paddingRight = 18 } };
+        foreach (Attribute a in Axes)
+        {
+            attrInner.Add(DemandPills(a, m.Profile[a]));
+        }
+
+        attrFrame.Add(attrInner);
+        infoCol.Add(attrFrame);
+
+        topRow.Add(infoCol);
+        _detailCol.Add(topRow);
+
+        _detailCol.Add(new VisualElement { style = { flexGrow = 1 } }); // push the FIGHT plate to the bottom
+
+        var cta = new VisualElement { style = { height = 64, flexDirection = FlexDirection.Row, alignItems = Align.Center, justifyContent = Justify.Center } };
+        BardChrome.BannerPrimary(cta, _art, 64);
+        if (!m.Defeated)
+        {
+            cta.Add(GreenGlyph());
+        }
+
         cta.Add(new Label(m.Defeated ? "Already cleared" : "FIGHT")
         {
-            style = { color = (Color)(m.Defeated ? BardTheme.Gilt : BardTheme.Parchment), fontSize = 22, unityFontStyleAndWeight = FontStyle.Bold },
+            style = { color = (Color)(m.Defeated ? BardTheme.Gilt : BardTheme.Parchment), fontSize = 22, unityFontStyleAndWeight = FontStyle.Bold, unityTextAlign = TextAnchor.MiddleCenter },
         });
         _detailCol.Add(cta);
     }
+
+    // One foe demand: the attribute icon followed by a 10-pill bar filled to the demand value (no number).
+    private VisualElement DemandPills(Attribute a, double demand)
+    {
+        int value = Mathf.Clamp(Mathf.RoundToInt((float)demand), 0, 10);
+        Color fill = BardTheme.AxisColor(a);
+        var empty = new Color(0f, 0f, 0f, 0.16f); // faint hollow on the light parchment
+        var row = new VisualElement { style = { flexDirection = FlexDirection.Row, alignItems = Align.Center, marginTop = 7 } };
+        row.Add(new Image
+        {
+            image = _art.AttributeIcon(a),
+            pickingMode = PickingMode.Ignore,
+            style = { width = 70, height = 70, marginRight = 12, flexShrink = 0 },
+        });
+        for (int i = 0; i < 10; i++)
+        {
+            row.Add(new VisualElement
+            {
+                style =
+                {
+                    width = 12, height = 18, marginRight = 3, flexShrink = 0,
+                    backgroundColor = i < value ? fill : empty,
+                    borderTopLeftRadius = 3, borderTopRightRadius = 3, borderBottomLeftRadius = 3, borderBottomRightRadius = 3,
+                },
+            });
+        }
+
+        return row;
+    }
+
+    // Strokes a rounded-rect border whose corners round INWARD (concave) — a CSS borderRadius only rounds
+    // outward. Each corner is a quarter arc centered on the rectangle's own corner, so it scoops into the box.
+    private static void DrawInwardBorder(MeshGenerationContext ctx, Color color, float lineWidth, float radius)
+    {
+        VisualElement e = ctx.visualElement;
+        float w = e.contentRect.width, h = e.contentRect.height;
+        if (w <= 0f || h <= 0f)
+        {
+            return;
+        }
+
+        float o = lineWidth / 2f;
+        float r = Mathf.Min(radius, (Mathf.Min(w, h) / 2f) - o);
+        Painter2D p = ctx.painter2D;
+        p.lineWidth = lineWidth;
+        p.strokeColor = color;
+        p.lineJoin = LineJoin.Round;
+        p.lineCap = LineCap.Round;
+        p.BeginPath();
+        p.MoveTo(new Vector2(o + r, o));
+        p.LineTo(new Vector2(w - o - r, o));
+        AddConcaveCorner(p, new Vector2(w - o, o), r, 180f, 90f);
+        p.LineTo(new Vector2(w - o, h - o - r));
+        AddConcaveCorner(p, new Vector2(w - o, h - o), r, 270f, 180f);
+        p.LineTo(new Vector2(o + r, h - o));
+        AddConcaveCorner(p, new Vector2(o, h - o), r, 0f, -90f);
+        p.LineTo(new Vector2(o, o + r));
+        AddConcaveCorner(p, new Vector2(o, o), r, 90f, 0f);
+        p.ClosePath();
+        p.Stroke();
+    }
+
+    // Emits the polyline of one concave corner: a quarter arc of the circle centered on the rect's own corner
+    // (so it curves into the box), from startDeg to endDeg.
+    private static void AddConcaveCorner(Painter2D p, Vector2 c, float r, float startDeg, float endDeg)
+    {
+        const int steps = 6;
+        for (int i = 1; i <= steps; i++)
+        {
+            float t = Mathf.Lerp(startDeg, endDeg, i / (float)steps) * Mathf.Deg2Rad;
+            p.LineTo(new Vector2(c.x + (r * Mathf.Cos(t)), c.y + (r * Mathf.Sin(t))));
+        }
+    }
+
+    // YARG's real green confirm glyph (the shared MenuStandard sprite tinted green via NavigationIcons), so the
+    // FIGHT plate matches the game's PLAY SONG button. Falls back to the drawn pip if the menu singleton or its
+    // icon set is unavailable.
+    private VisualElement GreenGlyph()
+    {
+        NavigationIcons icons = MenuData.NavigationIcons;
+        Sprite green = icons?.GetIcon(MenuAction.Green);
+        if (green == null)
+        {
+            return GreenPip();
+        }
+
+        // Size the element to the sprite's native aspect (148x108) so the horizontal fret bar — the "dash" —
+        // is not squished away by a forced square.
+        return new Image
+        {
+            sprite = green,
+            tintColor = icons.GetColor(MenuAction.Green),
+            pickingMode = PickingMode.Ignore,
+            style = { width = 48, height = 35, marginRight = 12, flexShrink = 0 },
+        };
+    }
+
+    // Drawn fallback for GreenGlyph — a small green disc echoing the controller button; used only when YARG's
+    // real glyph can't be reached.
+    private static VisualElement GreenPip() => new()
+    {
+        style =
+        {
+            width = 30, height = 30, marginRight = 12, flexShrink = 0,
+            backgroundColor = new Color(0.29f, 0.78f, 0.30f),
+            borderTopLeftRadius = 15, borderTopRightRadius = 15, borderBottomLeftRadius = 15, borderBottomRightRadius = 15,
+            borderTopWidth = 2, borderBottomWidth = 2, borderLeftWidth = 2, borderRightWidth = 2,
+            borderTopColor = new Color(0.12f, 0.35f, 0.13f), borderBottomColor = new Color(0.12f, 0.35f, 0.13f),
+            borderLeftColor = new Color(0.12f, 0.35f, 0.13f), borderRightColor = new Color(0.12f, 0.35f, 0.13f),
+        },
+    };
 
     private void Confirm()
     {
