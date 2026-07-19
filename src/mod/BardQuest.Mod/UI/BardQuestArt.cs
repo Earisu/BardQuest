@@ -29,12 +29,15 @@ public sealed class BardQuestArt
     public Texture2D BannerPrimary() => Get("banner_primary", 0xD9A441);
     public Texture2D BannerSecondary() => Get("banner_secondary", 0x6B4A2F);
     public Texture2D Logo() => Get("logo", 0x4ADE80);
-
-    // The small text-less logo mark for the Hub's header band (top-left). Tinted placeholder until the PNG lands.
-    public Texture2D LogoMark() => Get("logo_mark", 0x4ADE80);
     public Texture2D Glow() => Get("glow", 0xFFF3C0);
     public Texture2D SelectGlow() => Get("select_glow", 0xFFD868);
     public Texture2D BeginGlow() => Get("begin_glow", 0xFFD868);
+
+    // The stat-bar groove (9-sliced by StatBar). Dark placeholder channel until the PNG exists.
+    public Texture2D BarTrack() => Get("bar_track", 0x2A1E12);
+
+    // The bespoke frame for the Hub's wave list (Zone B). Tinted placeholder until the PNG lands.
+    public Texture2D ListFrame() => Get("list_frame", 0x6B4A2F);
 
     private Texture2D Get(string name, uint placeholderRgb, byte placeholderAlpha = 0xC0)
     {

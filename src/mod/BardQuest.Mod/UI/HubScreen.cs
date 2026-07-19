@@ -15,14 +15,11 @@ using MenuAction = yargpkg::YARG.Core.Input.MenuAction;
 
 namespace BardQuest.Mod.UI;
 
-// The Hub: the journey path on top, then a player-stats panel and a foe panel side by side. The foe is the
-// first undefeated monster in the working set (or the exclusive boss during a class-boss phase); the
-// encounter panel shows it against the player's own attribute levels plus the XP a clean clear would award.
-// Confirm launches the foe.
+// The Hub as a "wave board": a frameless player header, then the body split between the wave of up to five
+// selectable foes (left) and the selected foe's detail card (right). Up/Down move the cursor through the
+// wave; Green fights the selected foe; Red leaves.
 public sealed class HubScreen : IScreen
 {
-    private const int PanelHeight = 620;
-
     private static readonly Attribute[] Axes =
         [Attribute.Strength, Attribute.Endurance, Attribute.Technique, Attribute.Agility, Attribute.Dexterity];
 
@@ -32,16 +29,15 @@ public sealed class HubScreen : IScreen
     private readonly SongPreviewPlayer _preview;
     private readonly BardQuestArt _art;
     private readonly DomainQuest _quest;
-    private readonly JourneyPath _path;
 
-    private readonly VisualElement _playerCol = new();
-    private readonly VisualElement _encounterCol = new();
+    private readonly VisualElement _header = new();
+    private readonly VisualElement _listCol = new();
+    private readonly VisualElement _detailCol = new();
 
     private ActiveQuestView _view;
-    private List<MonsterStatus> _monsters = [];
-    private MonsterStatus _target;      // the single foe: first undefeated in the working set, or the boss
-    private string _pendingSelectHash;  // one-shot: on the first Refresh after a fight, prefer the just-played
-                                        // song as the target if it is still undefeated
+    private List<MonsterStatus> _rows = [];
+    private int _cursor;
+    private string _pendingSelectHash; // one-shot: after a fight, prefer the just-played song as the cursor row
 
     public VisualElement Root { get; }
 
@@ -60,57 +56,48 @@ public sealed class HubScreen : IScreen
         _art = art;
         _quest = quest;
         _pendingSelectHash = initialSelectionHash;
-        _path = new JourneyPath(art);
-        // Build() recreates the path's internal nodes/state every Refresh, but the JourneyPath instance and
-        // this subscription persist across the Hub's lifetime — subscribing once here (not per-Refresh)
-        // avoids stacking duplicate handlers.
-        _path.SelectionChanged += OnJourneySelectionChanged;
 
+        // A screen padding keeps every zone off the screen edge; the margins below then separate the header
+        // from the body and the two frames from each other. The bottom padding is larger than the top: the UI
+        // scales the 1080 reference to the display, so filling to a tight bottom edge crops on non-16:9
+        // screens — the extra clearance keeps the frame bottoms on-screen.
         Root = new VisualElement
         {
-            style = { flexGrow = 1, flexDirection = FlexDirection.Column, paddingTop = 20, paddingLeft = 40, paddingRight = 40, paddingBottom = 20 },
+            style = { flexGrow = 1, flexDirection = FlexDirection.Column, paddingTop = 40, paddingLeft = 40, paddingRight = 40, paddingBottom = 68 },
         };
 
-        // Top-align the two columns and let each size to its own content, so the parchment panels don't
-        // stretch to the full row height (which ran their bottoms off-screen) and both share a top edge.
-        // Push the body down a little and let the panels run lower, filling the space the journey band leaves.
-        var mlower = new VisualElement { style = { flexGrow = 1, flexDirection = FlexDirection.Row, marginTop = 44, alignItems = Align.FlexStart } };
-        // Both columns share one fixed height so the panels line up. YOU wears the ornate Panel frame (the
-        // wider "song-list" column), the FOE its parchment detail sheet.
-        _playerCol.style.width = Length.Percent(58);
-        _playerCol.style.height = PanelHeight;
-        _playerCol.style.marginRight = 16;
-        _playerCol.style.paddingTop = 32;
-        _playerCol.style.paddingBottom = 32;
-        _playerCol.style.paddingLeft = 34;
-        _playerCol.style.paddingRight = 34;
-        BardChrome.Panel(_playerCol, _art);
+        // Zone A — the player. Frameless (the app header is suppressed for the Hub): the stat strip sits on
+        // the backdrop, so its text is light. Content rebuilt each Refresh.
+        _header.style.flexShrink = 0;
+        _header.style.marginBottom = 28;
 
-        _encounterCol.style.flexGrow = 1;
-        _encounterCol.style.height = PanelHeight;
-        _encounterCol.style.paddingTop = 28;
-        _encounterCol.style.paddingBottom = 28;
-        _encounterCol.style.paddingLeft = 30;
-        _encounterCol.style.paddingRight = 30;
-        BardChrome.Parchment(_encounterCol, _art);
+        // Body — the wave (left) and the selected foe's detail card (right). It grows to fill the height left
+        // under the header, and the columns stretch to fill it (default Align.Stretch), so the frames take the
+        // whole screen with no dead space at the bottom.
+        var body = new VisualElement { style = { flexGrow = 1, flexDirection = FlexDirection.Row } };
 
-        mlower.Add(_playerCol);
-        mlower.Add(_encounterCol);
+        _listCol.style.width = Length.Percent(42);
+        _listCol.style.marginRight = 28; // gap between the two frames
+        _listCol.style.paddingTop = 34;
+        _listCol.style.paddingBottom = 34;
+        _listCol.style.paddingLeft = 30;
+        _listCol.style.paddingRight = 30;
+        BardChrome.ListFrame(_listCol, _art); // retune padding when list_frame.png lands
 
-        // The Hub's own header (the app header is suppressed for this screen): the small logo mark pinned left,
-        // the journey path filling the rest — the journey becomes the header.
-        var band = new VisualElement { style = { flexDirection = FlexDirection.Row, alignItems = Align.Center, flexShrink = 0 } };
-        band.Add(new Image
-        {
-            image = _art.LogoMark(),
-            pickingMode = PickingMode.Ignore,
-            style = { width = 76, height = 76, marginRight = 20, flexShrink = 0 },
-        });
-        _path.Root.style.flexGrow = 1; // journey stretches across the band to the right of the logo
-        band.Add(_path.Root);
+        // The detail card wears the ornate Panel frame; its 9-slice border renders thick, so the content is
+        // inset well past it — otherwise the album/title burrow under the frame.
+        _detailCol.style.flexGrow = 1;
+        _detailCol.style.paddingTop = 96;
+        _detailCol.style.paddingBottom = 72;
+        _detailCol.style.paddingLeft = 84;
+        _detailCol.style.paddingRight = 84;
+        BardChrome.Panel(_detailCol, _art);
 
-        Root.Add(band);
-        Root.Add(mlower);
+        body.Add(_listCol);
+        body.Add(_detailCol);
+
+        Root.Add(_header);
+        Root.Add(body);
 
         Refresh();
     }
@@ -119,380 +106,292 @@ public sealed class HubScreen : IScreen
     public void Refresh()
     {
         _view = _controller.Resolve(_quest);
-        _monsters = _view.AtClassBoss && _view.Boss != null
+        _rows = _view.AtClassBoss && _view.Boss != null
             ? [_view.Boss]
             : [.. _view.WorkingSet];
-
-        _target = ResolveTarget();
+        _cursor = ResolveCursor();
         _pendingSelectHash = null; // one-shot consumed
 
-        _path.Build(_view.Class, _view.Subrank);
-        BuildPlayerPanel();
-        BuildEncounterPanel();
+        BuildHeader();
+        BuildList();
+        BuildDetail();
+        PreviewSelected();
     }
 
-    // The foe under the cursor: the exclusive boss at a class-boss phase; otherwise the first undefeated
-    // monster in the working set. If the just-fought song (pendingSelectHash) is still undefeated, prefer it
-    // so a failed attempt re-presents the same foe rather than skipping ahead.
-    private MonsterStatus ResolveTarget()
+    // Where the cursor lands when the board (re)builds: the just-fought song if still undefeated, else the
+    // first undefeated row, else the first row.
+    private int ResolveCursor()
     {
-        if (_view.AtClassBoss && _view.Boss != null)
+        if (_rows.Count == 0)
         {
-            return _view.Boss;
+            return 0;
         }
 
         if (_pendingSelectHash != null)
         {
-            MonsterStatus just = _monsters.FirstOrDefault(
+            int just = _rows.FindIndex(
                 m => !m.Defeated && string.Equals(m.Hash, _pendingSelectHash, StringComparison.OrdinalIgnoreCase));
-            if (just != null)
+            if (just >= 0)
             {
                 return just;
             }
         }
 
-        return _monsters.FirstOrDefault(m => !m.Defeated) ?? _monsters.FirstOrDefault();
+        int undefeated = _rows.FindIndex(m => !m.Defeated);
+        return undefeated >= 0 ? undefeated : 0;
     }
 
-    // Fires only from ◄►, never from Refresh (JourneyPath.Build sets its Selected field directly rather than
-    // through MoveSelection). Swaps the duel for a summary panel on non-current nodes.
-    private void OnJourneySelectionChanged()
+    private MonsterStatus Selected() => _rows.Count > 0 ? _rows[_cursor] : null;
+
+    private void Move(int delta)
     {
-        ClassNode node = _path.SelectedNode;
-        switch (node.State)
+        if (_rows.Count == 0)
         {
-            case ClassNodeState.Current:
-                _playerCol.style.display = DisplayStyle.Flex;
-                BardChrome.Parchment(_encounterCol, _art);
-                BuildEncounterPanel();
-                break;
-            case ClassNodeState.Cleared:
-                _preview.Stop();
-                _playerCol.style.display = DisplayStyle.None;
-                BardChrome.Parchment(_encounterCol, _art);
-                BuildConqueredPanel(node);
-                break;
-            default: // Locked
-                _preview.Stop();
-                _playerCol.style.display = DisplayStyle.None;
-                BardChrome.Parchment(_encounterCol, _art);
-                BuildLockedPanel(node);
-                break;
+            return;
+        }
+
+        _cursor = Mathf.Clamp(_cursor + delta, 0, _rows.Count - 1);
+        BuildList();
+        BuildDetail();
+        PreviewSelected();
+    }
+
+    // Preview the selected song, like YARG's Music Library (debounced inside the player). Silent when there
+    // is no foe (a completed quest).
+    private void PreviewSelected()
+    {
+        MonsterStatus sel = Selected();
+        if (sel == null)
+        {
+            _preview.Stop();
+        }
+        else
+        {
+            _preview.Play(sel.Hash);
         }
     }
 
-    // Cleared node summary: the class medallion plus a "Conquered" heading, filling the row (the YOU panel
-    // is hidden, so this panel's flexGrow:1 takes the space).
-    private void BuildConqueredPanel(ClassNode node)
+    // Zone A — the player: class/rank medallion (top-left), class + subrank, the XP-to-rank bar, and the five
+    // attribute levels as plain icon + value.
+    private void BuildHeader()
     {
-        _encounterCol.Clear();
-        var wrap = new VisualElement
-        {
-            style = { flexGrow = 1, alignItems = Align.Center, justifyContent = Justify.Center },
-        };
-        wrap.Add(new Image
-        {
-            image = _art.ClassMedallion(node.Class),
-            style = { width = 120, height = 120, marginBottom = 16 },
-        });
-        var heading = new Label($"{BardTheme.ClassName(node.Class)} — Conquered")
-        {
-            style = { color = (Color)BardTheme.Nightwood, fontSize = 24, unityFontStyleAndWeight = FontStyle.Bold, unityTextAlign = TextAnchor.MiddleCenter },
-        };
-        BardFont.ApplyDisplay(heading);
-        wrap.Add(heading);
-        _encounterCol.Add(wrap);
-    }
+        _header.Clear();
+        var row = new VisualElement { style = { flexDirection = FlexDirection.Row, alignItems = Align.Center } };
 
-    // Locked node summary: a plain message, no monster content (the player hasn't reached this class yet).
-    private void BuildLockedPanel(ClassNode node)
-    {
-        _encounterCol.Clear();
-        var wrap = new VisualElement
-        {
-            style = { flexGrow = 1, alignItems = Align.Center, justifyContent = Justify.Center },
-        };
-        var message = new Label($"Reach {BardTheme.ClassName(node.Class)} to unlock")
-        {
-            style = { color = (Color)BardTheme.Nightwood, fontSize = 22, unityFontStyleAndWeight = FontStyle.Bold, unityTextAlign = TextAnchor.MiddleCenter },
-        };
-        BardFont.ApplyDisplay(message);
-        wrap.Add(message);
-        _encounterCol.Add(wrap);
-    }
-
-    private void BuildPlayerPanel()
-    {
-        _playerCol.Clear();
-
-        var header = new VisualElement { style = { flexDirection = FlexDirection.Row, alignItems = Align.Center, marginBottom = 10 } };
-        header.Add(new Image
+        row.Add(new Image
         {
             image = _art.ClassMedallion(_view.Class),
-            style = { width = 64, height = 64, marginRight = 12 },
+            pickingMode = PickingMode.Ignore,
+            style = { width = 84, height = 84, marginRight = 18, flexShrink = 0 },
         });
-        var title = new Label(_view.IsComplete
+
+        var idCol = new VisualElement { style = { flexGrow = 1, justifyContent = Justify.Center } };
+        var classLabel = new Label(_view.IsComplete
             ? "LEGENDWEAVER"
             : $"{BardTheme.ClassName(_view.Class)} {BardTheme.Roman(_view.Subrank)}")
         {
-            style = { color = (Color)BardTheme.Nightwood, fontSize = 22, unityFontStyleAndWeight = FontStyle.Bold, flexShrink = 1, whiteSpace = WhiteSpace.Normal },
+            style = { color = (Color)BardTheme.Gilt, fontSize = 30, letterSpacing = 2, unityFontStyleAndWeight = FontStyle.Bold },
         };
-        BardFont.ApplyDisplay(title);
-        header.Add(title);
-        _playerCol.Add(header);
-        _playerCol.Add(ClassXpBar());
+        BardFont.ApplyDisplay(classLabel);
+        idCol.Add(classLabel);
+        idCol.Add(ClassXpBar());
+        row.Add(idCol);
 
-        var sectionBanner = new VisualElement
-        {
-            style = { height = 36, marginTop = 14, marginBottom = 10, alignItems = Align.Center, justifyContent = Justify.Center },
-        };
-        BardChrome.BannerSecondary(sectionBanner, _art, 36);
-        sectionBanner.Add(new Label("— Your Stats —")
-        {
-            style = { color = (Color)BardTheme.Parchment, fontSize = 16, unityFontStyleAndWeight = FontStyle.Bold },
-        });
-        _playerCol.Add(sectionBanner);
-
-        var curve = LevelCurve.ForPace(_quest.Pace);
+        var attrRow = new VisualElement { style = { flexDirection = FlexDirection.Row, alignItems = Align.Center, flexShrink = 0 } };
         foreach (Attribute a in Axes)
         {
-            _playerCol.Add(AttributeStatRow(a, curve));
+            attrRow.Add(AttributeCell(a));
         }
+
+        row.Add(attrRow);
+        _header.Add(row);
     }
 
-    // Fraction of the way through the current class band, by score.
+    // Score progress within the current class band — the one surviving StatBar.
     private VisualElement ClassXpBar()
     {
         (double lo, double hi) = ClassDerivation.Range(_view.Class);
         float frac = hi > lo ? Mathf.Clamp01((float)((_view.Profile.Score - lo) / (hi - lo))) : 1f;
-        var wrap = new VisualElement();
+        var wrap = new VisualElement { style = { maxWidth = 340, marginTop = 6 } };
         wrap.Add(new Label($"{Mathf.RoundToInt(frac * 100f)}% to next rank")
         {
-            style = { color = (Color)BardTheme.OldWood, fontSize = 13, marginBottom = 4 },
+            style = { color = (Color)BardTheme.Parchment, fontSize = 12, marginBottom = 3 },
         });
-        var track = new VisualElement
-        {
-            style = { height = 12, backgroundColor = (Color)BardTheme.OldWood },
-        };
-        track.Add(new VisualElement
-        {
-            style = { width = Length.Percent(frac * 100f), height = 12, backgroundColor = (Color)BardTheme.Glowmoss },
-        });
-        wrap.Add(track);
+        wrap.Add(StatBar.Build(_art, frac, (Color)BardTheme.Glowmoss, 12f));
         return wrap;
     }
 
-    // One axis of the player's own sheet: icon, name, a level badge, and a fill bar to the next level.
-    private VisualElement AttributeStatRow(Attribute a, LevelCurve curve)
+    // One attribute as a plain icon + its level value (no ring).
+    private VisualElement AttributeCell(Attribute a)
     {
-        AttributeState state = _view.Profile[a];
-        (_, double into, double needed) = curve.Progress(state.Xp);
-        float frac = needed > 0 ? Mathf.Clamp01((float)(into / needed)) : 0f;
-
-        var row = new VisualElement { style = { flexDirection = FlexDirection.Row, alignItems = Align.Center, marginTop = 8 } };
-        row.Add(new Image
+        var cell = new VisualElement { style = { alignItems = Align.Center, marginLeft = 18 } };
+        cell.Add(new Image
         {
             image = _art.AttributeIcon(a),
-            style = { width = 20, height = 20, marginRight = 6 },
+            pickingMode = PickingMode.Ignore,
+            style = { width = 40, height = 40 },
         });
-        row.Add(new Label(BardTheme.AxisName(a))
+        cell.Add(new Label(_view.Profile[a].Level.ToString())
         {
-            style = { color = (Color)BardTheme.Nightwood, fontSize = 13, width = 68 },
+            style = { color = BardTheme.AxisColor(a), fontSize = 18, unityFontStyleAndWeight = FontStyle.Bold, marginTop = 2 },
         });
-
-        var badge = new VisualElement
-        {
-            style =
-            {
-                width = 26, height = 22, marginRight = 8, alignItems = Align.Center, justifyContent = Justify.Center,
-                backgroundColor = (Color)BardTheme.OldWood,
-                borderTopLeftRadius = 6, borderTopRightRadius = 6, borderBottomLeftRadius = 6, borderBottomRightRadius = 6,
-            },
-        };
-        badge.Add(new Label(state.Level.ToString())
-        {
-            style = { color = (Color)BardTheme.Parchment, fontSize = 13, unityFontStyleAndWeight = FontStyle.Bold },
-        });
-        row.Add(badge);
-
-        var track = new VisualElement { style = { flexGrow = 1, height = 10, backgroundColor = new Color(0f, 0f, 0f, 0.18f) } };
-        track.Add(new VisualElement
-        {
-            style = { width = Length.Percent(frac * 100f), height = 10, backgroundColor = BardTheme.AxisColor(a) },
-        });
-        row.Add(track);
-        return row;
+        return cell;
     }
 
-    private void BuildEncounterPanel()
+    // Zone B — the wave: up to five selectable foe rows (or the lone boss). Light text (the frame's interior
+    // is dark/the backdrop shows through the real frame's hollow center).
+    private void BuildList()
     {
-        _encounterCol.Clear();
-        if (_target == null)
+        _listCol.Clear();
+        _listCol.Add(new Label(_view.AtClassBoss ? "— The Boss —" : "— The Wave —")
         {
-            _preview.Stop();
-            _encounterCol.Add(new Label(_view.IsComplete ? "The quest is complete." : "No monsters delivered.")
+            style = { color = (Color)BardTheme.Gilt, fontSize = 16, unityFontStyleAndWeight = FontStyle.Bold, unityTextAlign = TextAnchor.MiddleCenter, marginBottom = 12 },
+        });
+
+        if (_rows.Count == 0)
+        {
+            _listCol.Add(new Label(_view.IsComplete ? "Your legend is complete" : "No monsters delivered")
             {
-                style = { color = (Color)BardTheme.Nightwood, fontSize = 22 },
+                style = { color = (Color)BardTheme.Parchment, fontSize = 16, unityTextAlign = TextAnchor.MiddleCenter, whiteSpace = WhiteSpace.Normal },
             });
             return;
         }
 
-        MonsterStatus m = _target;
-        SongEnricher.SongInfo? info = _enricher.Lookup(m.Hash);
-
-        // Preview the highlighted song, like YARG's Music Library. No-op if it is already previewing this
-        // song; debounced inside the player so scrolling Up/Down only previews the settled selection.
-        _preview.Play(m.Hash);
-
-        var cardTop = new VisualElement { style = { flexDirection = FlexDirection.Row } };
-
-        const float frameSize = 170f;
-        var frameStack = new VisualElement { style = { width = frameSize, height = frameSize, flexShrink = 0 } };
-        var album = new Image
+        for (int i = 0; i < _rows.Count; i++)
         {
-            image = info?.Album,
-            // YARGImage.LoadTexture decodes bottom-up (YARG's own uGUI covers flip it with a negative
-            // uvRect); UITK does not, so flip the element vertically or the cover renders upside down.
-            // Inset ~17.5% each side to match the frame art's transparent window (~65% of the frame), so
-            // the cover fills the opening instead of poking past the border.
-            style = { position = Position.Absolute, left = 30, top = 30, width = 110, height = 110 },
-        };
-        if (info?.Album != null)
-        {
-            album.style.scale = new Scale(new Vector2(1f, -1f));
+            _listCol.Add(WaveRow(_rows[i], i == _cursor));
         }
-        else
-        {
-            album.style.backgroundColor = (Color)BardTheme.Nightwood;
-        }
-
-        frameStack.Add(album);
-        frameStack.Add(new Image
-        {
-            image = _art.MonsterFrame(m.Type),
-            style = { position = Position.Absolute, left = 0, top = 0, width = frameSize, height = frameSize },
-        });
-        cardTop.Add(frameStack);
-
-        var infoStack = new VisualElement { style = { flexGrow = 1, marginLeft = 20, justifyContent = Justify.Center } };
-        infoStack.Add(new Label(info?.Title ?? "Unknown")
-        {
-            style = { color = (Color)BardTheme.Nightwood, fontSize = 22, unityFontStyleAndWeight = FontStyle.Bold },
-        });
-        infoStack.Add(new Label(info?.Artist ?? "")
-        {
-            style = { color = (Color)BardTheme.OldWood, fontSize = 15, marginBottom = 10 },
-        });
-
-        var columnHeader = new VisualElement { style = { flexDirection = FlexDirection.Row, marginBottom = 4 } };
-        columnHeader.Add(new VisualElement { style = { width = 96 } });
-        columnHeader.Add(new Label("Demand vs. you")
-        {
-            style = { color = (Color)BardTheme.OldWood, fontSize = 11, flexGrow = 1 },
-        });
-        columnHeader.Add(new Label("XP on clear")
-        {
-            style = { color = (Color)BardTheme.OldWood, fontSize = 11, width = 48, unityTextAlign = TextAnchor.MiddleRight },
-        });
-        infoStack.Add(columnHeader);
-
-        var playerLevels = new Dictionary<Attribute, int>(Axes.Length);
-        foreach (Attribute a in Axes)
-        {
-            playerLevels[a] = _view.Profile[a].Level;
-        }
-
-        IReadOnlyDictionary<Attribute, double> rewards = RewardProjection.ForCleanClear(m.Profile, playerLevels);
-        foreach (Attribute a in Axes)
-        {
-            infoStack.Add(CompareBar(a, m.Profile[a], playerLevels[a], rewards[a]));
-        }
-
-        cardTop.Add(infoStack);
-        _encounterCol.Add(cardTop);
-
-        var cta = new VisualElement
-        {
-            style =
-            {
-                height = 56, marginTop = 18,
-                alignItems = Align.Center, justifyContent = Justify.Center,
-            },
-        };
-        BardChrome.BannerPrimary(cta, _art, 56);
-        cta.Add(new Label(m.Defeated ? "Already cleared" : "Confirm to FIGHT")
-        {
-            style =
-            {
-                color = (Color)(m.Defeated ? BardTheme.Gilt : BardTheme.Parchment),
-                fontSize = 20, unityFontStyleAndWeight = FontStyle.Bold, unityTextAlign = TextAnchor.MiddleCenter,
-            },
-        });
-        _encounterCol.Add(cta);
     }
 
-    // One axis: the song's demand (colored) over the player's current level (faint) on a 0..10 track, plus
-    // the XP a clean clear of this axis would award at the player's current levels.
-    private VisualElement CompareBar(Attribute a, double songScore, int playerLevel, double reward)
+    private VisualElement WaveRow(MonsterStatus m, bool selected)
     {
-        var wrap = new VisualElement { style = { flexDirection = FlexDirection.Row, alignItems = Align.Center, marginTop = 4 } };
-        wrap.Add(new Image
+        SongEnricher.SongInfo? info = _enricher.Lookup(m.Hash);
+        var row = new VisualElement
         {
-            image = _art.AttributeIcon(a),
-            style = { width = 22, height = 22, marginRight = 6 },
-        });
-        wrap.Add(new Label(BardTheme.AxisName(a))
+            style =
+            {
+                flexDirection = FlexDirection.Row, alignItems = Align.Center,
+                paddingTop = 8, paddingBottom = 8, paddingLeft = 10, paddingRight = 10, marginBottom = 6,
+                borderTopLeftRadius = 8, borderTopRightRadius = 8, borderBottomLeftRadius = 8, borderBottomRightRadius = 8,
+                opacity = m.Defeated ? 0.45f : 1f,
+            },
+        };
+        if (selected)
         {
-            style = { color = (Color)BardTheme.OldWood, fontSize = 14, width = 68 },
-        });
-        var track = new VisualElement { style = { flexGrow = 1, height = 14, backgroundColor = (Color)BardTheme.Nightwood } };
-        track.Add(new VisualElement
+            row.style.backgroundColor = new Color(1f, 0.85f, 0.4f, 0.22f); // drawn cursor highlight
+        }
+
+        row.Add(new Image
         {
-            style = { position = Position.Absolute, left = 0, top = 0, height = 14, width = Length.Percent(Mathf.Clamp01(playerLevel / 10f) * 100f), backgroundColor = new Color(1, 1, 1, 0.18f) },
+            image = _art.RankBadge(m.Profile.ToRank()),
+            pickingMode = PickingMode.Ignore,
+            style = { width = 42, height = 42, marginRight = 12, flexShrink = 0 },
         });
-        track.Add(new VisualElement
+
+        var textCol = new VisualElement { style = { flexGrow = 1, flexShrink = 1, overflow = Overflow.Hidden } };
+        textCol.Add(new Label(info?.Title ?? "Unknown")
         {
-            style = { position = Position.Absolute, left = 0, top = 0, height = 14, width = Length.Percent(Mathf.Clamp01((float)songScore / 10f) * 100f), backgroundColor = BardTheme.AxisColor(a) },
+            style = { color = (Color)BardTheme.Parchment, fontSize = 16, unityFontStyleAndWeight = FontStyle.Bold, whiteSpace = WhiteSpace.NoWrap, overflow = Overflow.Hidden, textOverflow = TextOverflow.Ellipsis },
         });
-        wrap.Add(track);
-        wrap.Add(new Label($"+{Math.Round(reward)}")
+        textCol.Add(new Label(info?.Artist ?? "")
         {
-            style = { color = (Color)BardTheme.Glowmoss, fontSize = 14, width = 48, unityFontStyleAndWeight = FontStyle.Bold, unityTextAlign = TextAnchor.MiddleRight },
+            style = { color = (Color)BardTheme.Gilt, fontSize = 12, whiteSpace = WhiteSpace.NoWrap, overflow = Overflow.Hidden, textOverflow = TextOverflow.Ellipsis },
         });
-        return wrap;
+        row.Add(textCol);
+
+        if (m.Type != MonsterType.Regular)
+        {
+            row.Add(new Label(TypeTag(m.Type))
+            {
+                style = { color = (Color)BardTheme.Ember, fontSize = 12, unityFontStyleAndWeight = FontStyle.Bold, marginLeft = 8, flexShrink = 0 },
+            });
+        }
+
+        if (m.Defeated)
+        {
+            row.Add(new Label("✓")
+            {
+                style = { color = (Color)BardTheme.Glowmoss, fontSize = 18, unityFontStyleAndWeight = FontStyle.Bold, marginLeft = 8, flexShrink = 0 },
+            });
+        }
+
+        return row;
+    }
+
+    private static string TypeTag(MonsterType type) => type switch
+    {
+        MonsterType.Elite => "ELITE",
+        MonsterType.Boss => "BOSS",
+        MonsterType.Rare => "RARE",
+        _ => "REGULAR",
+    };
+
+    // Zone C — STUB. Task 4 replaces this with the full detail card (album/frame, shield rank + type, plain
+    // demand cells, green FIGHT pip). For now it names the selected foe and shows the FIGHT plate so the
+    // Green binding is verifiable. The Panel interior is light parchment, so its text is dark.
+    private void BuildDetail()
+    {
+        _detailCol.Clear();
+        MonsterStatus m = Selected();
+        if (m == null)
+        {
+            _detailCol.Add(new Label(_view.IsComplete ? "The quest is complete." : "No foe selected.")
+            {
+                style = { color = (Color)BardTheme.Nightwood, fontSize = 20, unityTextAlign = TextAnchor.MiddleCenter },
+            });
+            return;
+        }
+
+        SongEnricher.SongInfo? info = _enricher.Lookup(m.Hash);
+        var title = new Label(info?.Title ?? "Unknown")
+        {
+            style = { color = (Color)BardTheme.Nightwood, fontSize = 24, unityFontStyleAndWeight = FontStyle.Bold, unityTextAlign = TextAnchor.MiddleCenter, whiteSpace = WhiteSpace.Normal },
+        };
+        BardFont.ApplyDisplay(title);
+        _detailCol.Add(title);
+        _detailCol.Add(new Label(info?.Artist ?? "")
+        {
+            style = { color = (Color)BardTheme.OldWood, fontSize = 16, unityTextAlign = TextAnchor.MiddleCenter, marginBottom = 20 },
+        });
+
+        var cta = new VisualElement { style = { height = 60, marginTop = 16, alignItems = Align.Center, justifyContent = Justify.Center } };
+        BardChrome.BannerPrimary(cta, _art, 60);
+        cta.Add(new Label(m.Defeated ? "Already cleared" : "FIGHT")
+        {
+            style = { color = (Color)(m.Defeated ? BardTheme.Gilt : BardTheme.Parchment), fontSize = 22, unityFontStyleAndWeight = FontStyle.Bold },
+        });
+        _detailCol.Add(cta);
     }
 
     private void Confirm()
     {
-        // Cleared/Locked nodes have no fightable foe; a class other than the current one is browse-only.
-        if (_path.SelectedNode.State != ClassNodeState.Current || _target == null || _target.Defeated)
+        MonsterStatus sel = Selected();
+        if (sel == null || sel.Defeated)
         {
             return;
         }
 
-        string hash = _target.Hash;
-
-        if (!_controller.CanLaunch(hash))
+        if (!_controller.CanLaunch(sel.Hash))
         {
-            ModLog.Warn($"HubScreen: song {hash} is no longer in the library; not launching.");
+            ModLog.Warn($"HubScreen: song {sel.Hash} is no longer in the library; not launching.");
             return;
         }
 
         _preview.Stop();
         _canvas.PrepareForLaunch();
-        _controller.Launch(_quest, hash);
+        _controller.Launch(_quest, sel.Hash);
     }
 
     private void Back() => _canvas.Pop();
 
-    // Fires on every pop (Red action, header back button, or bulk teardown) — silence the preview so it can't
-    // loop over the main menu after we leave.
+    // Fires on every pop (Red action or bulk teardown) — silence the preview so it can't loop over the main
+    // menu after we leave.
     public void OnPop() => _preview.Stop();
 
     public NavigationScheme BuildScheme() => new(
     [
-        new(MenuAction.Left, "Menu.Common.Scroll", () => _path.MoveSelection(-1)),
-        new(MenuAction.Right, "Menu.Common.Scroll", () => _path.MoveSelection(1)),
+        new(MenuAction.Up, "Menu.Common.Scroll", () => Move(-1)),
+        new(MenuAction.Down, "Menu.Common.Scroll", () => Move(1)),
         new(MenuAction.Green, "Menu.Common.Confirm", Confirm),
         new(MenuAction.Red, "Menu.Common.Back", Back),
     ], false);
