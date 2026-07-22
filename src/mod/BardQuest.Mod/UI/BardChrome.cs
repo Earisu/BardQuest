@@ -18,10 +18,10 @@ public static class BardChrome
     public static void Parchment(VisualElement e, BardQuestArt art)
         => Apply(e, art.ParchmentCard(), 90, 90, 90, 90, 0.5f);
 
-    // The wave-list frame (Zone B). Retune insets when list_frame.png lands; the placeholder is a plain
-    // tinted card until then.
-    public static void ListFrame(VisualElement e, BardQuestArt art)
-        => Apply(e, art.ListFrame(), 140, 140, 140, 140, 0.5f);
+    // The plain wooden 9-slice border (header + wave list). Source 232x224 with rounded corners; a ~70px
+    // inset clears the rounded corner so only the straight rails stretch, and the scale renders the rail thin.
+    public static void FrameWood(VisualElement e, BardQuestArt art)
+        => Apply(e, art.FrameWood(), 70, 70, 70, 70, 0.7f);
 
     // Gold action plate. Source 1950x435; gem end-caps ~260px, gold rail ~60px. The caller's height sets
     // the scale so the caps keep their aspect and only the middle stretches horizontally to fit.

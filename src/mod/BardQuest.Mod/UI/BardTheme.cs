@@ -19,6 +19,9 @@ public static class BardTheme
     public static readonly Color32 Card = new(0xF2, 0xEC, 0xD8, 0xFF);
     public static readonly Color32 FeyMagic = new(0xB0, 0x6C, 0xF7, 0xFF);
     public static readonly Color32 Ember = new(0xFF, 0x8A, 0x4C, 0xFF);
+    public static readonly Color32 Leaf = new(0x48, 0x96, 0x1A, 0xFF); // sampled from the subrank leaf art
+
+
 
     public static string ClassName(PlayerClass c) => c.ToString();
 
@@ -33,12 +36,13 @@ public static class BardTheme
 
     public static string PaceName(QuestPace p) => p.ToString();
 
+    // Sampled from the attribute icon art so the label/bar tint matches the icon.
     public static Color AxisColor(Attribute a) => a switch
     {
-        Attribute.Strength => new Color32(0xE0, 0x5A, 0x4C, 0xFF),
-        Attribute.Endurance => new Color32(0xFF, 0x8A, 0x4C, 0xFF),
-        Attribute.Technique => new Color32(0x6C, 0xB6, 0xF7, 0xFF),
-        Attribute.Agility => new Color32(0x4A, 0xDE, 0x80, 0xFF),
-        _ => new Color32(0xD9, 0xA4, 0x41, 0xFF), // Dexterity
+        Attribute.Strength => new Color32(0xFF, 0x65, 0x21, 0xFF),  // red-orange
+        Attribute.Endurance => new Color32(0xEE, 0xAD, 0x21, 0xFF), // yellow
+        Attribute.Technique => new Color32(0xB5, 0x61, 0xFA, 0xFF), // purple
+        Attribute.Agility => new Color32(0x1E, 0x9F, 0xFF, 0xFF),   // blue
+        _ => new Color32(0xB0, 0xEE, 0x51, 0xFF),                   // Dexterity — green
     };
 }

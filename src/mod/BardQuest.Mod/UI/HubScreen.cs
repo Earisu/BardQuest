@@ -26,6 +26,16 @@ public sealed class HubScreen : IScreen
 
     private static Texture2D _dividerTex;
 
+    // The header's class medallion: a large round badge overhanging the header's far-left edge (as if it sits
+    // on it), vertically centered.
+    private const float ClassBadge = 170f;
+    private const float ClassBadgeLeft = -50f;
+
+    // How far the wood board bleeds toward the panel edge (tunable). It must be small enough that the board
+    // reaches under the frame's inner rail — otherwise the backdrop shows in the gap between them. Content
+    // breathing room lives on the board's own padding instead.
+    private const float FrameBleed = 16f;
+
     private readonly BardQuestCanvas _canvas;
     private readonly QuestController _controller;
     private readonly SongEnricher _enricher;
@@ -34,8 +44,12 @@ public sealed class HubScreen : IScreen
     private readonly DomainQuest _quest;
 
     private readonly VisualElement _header = new();
+    private readonly VisualElement _headerBoard = new(); // wood interior of the header frame
+    private readonly Image _classBadge = new(); // oversized class medallion, overhanging the header's far left
     private readonly VisualElement _listCol = new();
+    private readonly VisualElement _listBoard = new(); // wood interior of the list frame
     private readonly VisualElement _detailCol = new();
+    private readonly Label _callout = new();
 
     private ActiveQuestView _view;
     private List<MonsterStatus> _rows = [];
@@ -69,10 +83,33 @@ public sealed class HubScreen : IScreen
             style = { flexGrow = 1, flexDirection = FlexDirection.Column, paddingTop = 40, paddingLeft = 40, paddingRight = 40, paddingBottom = 68 },
         };
 
-        // Zone A — the player. Frameless (the app header is suppressed for the Hub): the stat strip sits on
-        // the backdrop, so its text is light. Content rebuilt each Refresh.
+        // Zone A — the player. Same wooden frame + wood-board interior as the wave list (Zone B), but the left
+        // corners are dropped in favor of a large class medallion (_classBadge) overhanging the far left; the
+        // board's left padding clears that medallion. Content rebuilt on the board.
         _header.style.flexShrink = 0;
         _header.style.marginBottom = 28;
+        _header.style.paddingTop = FrameBleed;
+        _header.style.paddingBottom = FrameBleed;
+        _header.style.paddingLeft = FrameBleed;
+        _header.style.paddingRight = FrameBleed;
+        BardChrome.FrameWood(_header, _art);
+        WoodBoard(_headerBoard);
+        _headerBoard.style.paddingTop = 2;
+        _headerBoard.style.paddingBottom = 2;
+        _headerBoard.style.paddingLeft = 130; // clear the class medallion on the far left
+        _headerBoard.style.paddingRight = 26;
+        _header.Add(_headerBoard);
+
+        // The class medallion: large, on the far left, a bit taller than the header and vertically centered
+        // (its image is set per-class in BuildHeader).
+        _classBadge.pickingMode = PickingMode.Ignore;
+        _classBadge.style.position = Position.Absolute;
+        _classBadge.style.left = ClassBadgeLeft;
+        _classBadge.style.top = Length.Percent(50);
+        _classBadge.style.translate = new Translate(0, Length.Percent(-50));
+        _classBadge.style.width = ClassBadge;
+        _classBadge.style.height = ClassBadge;
+        _header.Add(_classBadge);
 
         // Body — the wave (left) and the selected foe's detail card (right). It grows to fill the height left
         // under the header, and the columns stretch to fill it (default Align.Stretch), so the frames take the
@@ -81,11 +118,17 @@ public sealed class HubScreen : IScreen
 
         _listCol.style.width = Length.Percent(42);
         _listCol.style.marginRight = 28; // gap between the two frames
-        _listCol.style.paddingTop = 34;
-        _listCol.style.paddingBottom = 34;
-        _listCol.style.paddingLeft = 30;
-        _listCol.style.paddingRight = 30;
-        BardChrome.ListFrame(_listCol, _art); // retune padding when list_frame.png lands
+        _listCol.style.paddingTop = FrameBleed;
+        _listCol.style.paddingBottom = FrameBleed;
+        _listCol.style.paddingLeft = FrameBleed;
+        _listCol.style.paddingRight = FrameBleed;
+        BardChrome.FrameWood(_listCol, _art);
+        WoodBoard(_listBoard);
+        _listBoard.style.paddingTop = 18;
+        _listBoard.style.paddingBottom = 18;
+        _listBoard.style.paddingLeft = 16;
+        _listBoard.style.paddingRight = 16;
+        _listCol.Add(_listBoard);
 
         // The detail card wears the ornate Panel frame; its 9-slice border renders thick, so the content is
         // inset well past it — otherwise the album/title burrow under the frame.
@@ -99,10 +142,36 @@ public sealed class HubScreen : IScreen
         body.Add(_listCol);
         body.Add(_detailCol);
 
+        // A slim objective line between the header and the body — shown only for an Elite, a class boss, or
+        // completion (see UpdateCallout); hidden during the ordinary grind.
+        _callout.style.unityTextAlign = TextAnchor.MiddleCenter;
+        _callout.style.color = (Color)BardTheme.Gilt;
+        _callout.style.fontSize = 18;
+        _callout.style.unityFontStyleAndWeight = FontStyle.Bold;
+        _callout.style.marginBottom = 12;
+        _callout.style.flexShrink = 0;
+        _callout.style.display = DisplayStyle.None;
+        BardFont.ApplyDisplay(_callout);
+
         Root.Add(_header);
+        Root.Add(_callout);
         Root.Add(body);
 
         Refresh();
+    }
+
+    // The wood interior of a frame: fills the frame's hollow center (inset past the 9-slice border by the
+    // parent's padding). Its background survives Clear(); Build* rebuild content into it. Because it sits
+    // within the frame's opaque border, the wood never bleeds past the ornate outer silhouette.
+    private void WoodBoard(VisualElement board)
+    {
+        board.style.flexGrow = 1;
+        board.style.backgroundImage = new StyleBackground(_art.WoodPanel());
+        // Round the corners so the board nestles into the frame's rounded corners instead of poking out square.
+        board.style.borderTopLeftRadius = 22;
+        board.style.borderTopRightRadius = 22;
+        board.style.borderBottomLeftRadius = 22;
+        board.style.borderBottomRightRadius = 22;
     }
 
     // Re-resolve and rebuild (called on construct and after a play returns).
@@ -119,6 +188,7 @@ public sealed class HubScreen : IScreen
         BuildList();
         BuildDetail();
         PreviewSelected();
+        UpdateCallout();
     }
 
     // Where the cursor lands when the board (re)builds: the just-fought song if still undefeated, else the
@@ -178,7 +248,7 @@ public sealed class HubScreen : IScreen
     // dividers that fade out toward their top and bottom edges.
     private void BuildHeader()
     {
-        _header.Clear();
+        _headerBoard.Clear();
         var row = new VisualElement { style = { flexDirection = FlexDirection.Row, alignItems = Align.Stretch, justifyContent = Justify.Center } };
 
         row.Add(ClassPart());
@@ -189,70 +259,109 @@ public sealed class HubScreen : IScreen
             row.Add(AttributePart(a, curve));
         }
 
-        _header.Add(row);
+        _headerBoard.Add(row);
+        _classBadge.image = _art.ClassMedallion(_view.Class);
     }
 
-    // Part 1: the class medallion + name, its global XP-to-rank bar, and the percentage beneath.
+    // Part 1: to the right of the class medallion — the class name, a "Rank" row of leaf pips (the subrank),
+    // the global XP-to-rank bar, and the percentage beneath. Left-aligned so it reads off the medallion.
     private VisualElement ClassPart()
     {
         (double lo, double hi) = ClassDerivation.Range(_view.Class);
         float frac = hi > lo ? Mathf.Clamp01((float)((_view.Profile.Score - lo) / (hi - lo))) : 1f;
 
-        var part = new VisualElement { style = { flexGrow = 1, flexShrink = 1, alignItems = Align.Center, justifyContent = Justify.Center, paddingLeft = 10, paddingRight = 10 } };
+        var part = new VisualElement { style = { flexGrow = 1, flexShrink = 1, alignItems = Align.FlexStart, justifyContent = Justify.Center, paddingLeft = 10, paddingRight = 10 } };
 
-        var idRow = new VisualElement { style = { flexDirection = FlexDirection.Row, alignItems = Align.Center, marginBottom = 8 } };
-        idRow.Add(new Image
+        var name = new Label(_view.IsComplete ? "LEGENDWEAVER" : BardTheme.ClassName(_view.Class))
         {
-            image = _art.ClassMedallion(_view.Class),
-            pickingMode = PickingMode.Ignore,
-            style = { width = 56, height = 56, marginRight = 10, flexShrink = 0 },
-        });
-        var name = new Label(_view.IsComplete ? "LEGENDWEAVER" : $"{BardTheme.ClassName(_view.Class)} {BardTheme.Roman(_view.Subrank)}")
-        {
-            style = { color = (Color)BardTheme.Gilt, fontSize = 20, unityFontStyleAndWeight = FontStyle.Bold, whiteSpace = WhiteSpace.Normal, flexShrink = 1 },
+            style = { color = (Color)BardTheme.Gilt, fontSize = 26, unityFontStyleAndWeight = FontStyle.Bold, whiteSpace = WhiteSpace.Normal, flexShrink = 1, marginBottom = 4 },
         };
         BardFont.ApplyDisplay(name);
-        idRow.Add(name);
-        part.Add(idRow);
+        part.Add(name);
 
-        VisualElement bar = StatBar.Build(_art, frac, (Color)BardTheme.Glowmoss, 9f);
-        bar.style.width = 150;
+        part.Add(RankLeaves());
+
+        VisualElement bar = XpBar.Build(frac, (Color)BardTheme.Leaf);
+        bar.style.width = 176;
         part.Add(bar);
         part.Add(new Label($"{Mathf.RoundToInt(frac * 100f)}% to next rank")
         {
-            style = { color = (Color)BardTheme.Parchment, fontSize = 12, marginTop = 4 },
+            style = { color = (Color)BardTheme.Parchment, fontSize = 14, marginTop = 4 },
         });
         return part;
     }
 
-    // Parts 2-6: one attribute — its icon with the level beside it, the XP bar under, and current/next XP below.
+    // The subrank shown as leaf pips: the label "Rank" then three leaves (subranks I/II/III), filled up to the
+    // current subrank and dimmed beyond. Replaces the old Roman-numeral subrank next to the class name.
+    private VisualElement RankLeaves()
+    {
+        const int total = 3; // subranks I, II, III
+        int filled = _view.IsComplete ? total : Mathf.Clamp(_view.Subrank + 1, 0, total);
+
+        var row = new VisualElement { style = { flexDirection = FlexDirection.Row, alignItems = Align.Center, marginBottom = 4 } };
+        var rankLabel = new Label("Rank")
+        {
+            style = { color = (Color)BardTheme.Leaf, fontSize = 15, unityFontStyleAndWeight = FontStyle.Bold, marginRight = 8 },
+        };
+        BardFont.ApplyDisplay(rankLabel);
+        row.Add(rankLabel);
+        for (int i = 0; i < total; i++)
+        {
+            row.Add(new Image
+            {
+                image = i < filled ? _art.RankLeafFull() : _art.RankLeafEmpty(),
+                pickingMode = PickingMode.Ignore,
+                style = { width = 26, height = 26, marginRight = 3, flexShrink = 0 },
+            });
+        }
+
+        return row;
+    }
+
+    // Parts 2-6: one attribute — its icon beside the axis name (in the axis color) and the level "/10", then a
+    // glassy XP bar tinted the axis color, and current/next XP below.
     private VisualElement AttributePart(Attribute a, LevelCurve curve)
     {
         AttributeState state = _view.Profile[a];
         (_, double into, double needed) = curve.Progress(state.Xp);
         float frac = needed > 0 ? Mathf.Clamp01((float)(into / needed)) : 0f;
+        Color color = BardTheme.AxisColor(a);
 
-        var part = new VisualElement { style = { flexGrow = 1, flexShrink = 1, alignItems = Align.Center, justifyContent = Justify.Center, paddingLeft = 8, paddingRight = 8 } };
+        var part = new VisualElement { style = { flexGrow = 1, flexShrink = 1, justifyContent = Justify.Center, paddingLeft = 10, paddingRight = 10 } };
 
-        var iconRow = new VisualElement { style = { flexDirection = FlexDirection.Row, alignItems = Align.Center, marginBottom = 8 } };
-        iconRow.Add(new Image
+        var topRow = new VisualElement { style = { flexDirection = FlexDirection.Row, alignItems = Align.Center, marginBottom = 4 } };
+        topRow.Add(new Image
         {
             image = _art.AttributeIcon(a),
             pickingMode = PickingMode.Ignore,
-            style = { width = 42, height = 42, marginRight = 8 },
+            style = { width = 54, height = 54, marginRight = 12, flexShrink = 0 },
         });
-        iconRow.Add(new Label(state.Level.ToString())
-        {
-            style = { color = BardTheme.AxisColor(a), fontSize = 26, unityFontStyleAndWeight = FontStyle.Bold },
-        });
-        part.Add(iconRow);
 
-        VisualElement bar = StatBar.Build(_art, frac, BardTheme.AxisColor(a), 9f);
-        bar.style.width = 120;
-        part.Add(bar);
-        part.Add(new Label($"{Mathf.RoundToInt((float)into)}/{Mathf.RoundToInt((float)needed)}")
+        var textCol = new VisualElement { style = { flexGrow = 1, flexShrink = 1 } };
+        var nameLabel = new Label(BardTheme.AxisName(a).ToUpperInvariant())
         {
-            style = { color = (Color)BardTheme.Parchment, fontSize = 12, marginTop = 4 },
+            style = { color = color, fontSize = 17, unityFontStyleAndWeight = FontStyle.Bold, marginBottom = 2 },
+        };
+        BardFont.ApplyDisplay(nameLabel);
+        textCol.Add(nameLabel);
+
+        var valueRow = new VisualElement { style = { flexDirection = FlexDirection.Row, alignItems = Align.FlexEnd } };
+        valueRow.Add(new Label(state.Level.ToString())
+        {
+            style = { color = (Color)BardTheme.Parchment, fontSize = 31, unityFontStyleAndWeight = FontStyle.Bold },
+        });
+        valueRow.Add(new Label("/10")
+        {
+            style = { color = (Color)BardTheme.Parchment, fontSize = 15, marginLeft = 4, marginBottom = 4 },
+        });
+        textCol.Add(valueRow);
+        topRow.Add(textCol);
+        part.Add(topRow);
+
+        part.Add(XpBar.Build(frac, color));
+        part.Add(new Label($"{Mathf.RoundToInt((float)into):n0} / {Mathf.RoundToInt((float)needed):n0} XP")
+        {
+            style = { color = (Color)BardTheme.Parchment, fontSize = 13, marginTop = 5 },
         });
         return part;
     }
@@ -281,7 +390,7 @@ public sealed class HubScreen : IScreen
         for (int y = 0; y < h; y++)
         {
             float a = Mathf.Sin(y / (float)(h - 1) * Mathf.PI); // 0 at both ends, 1 in the middle
-            px[y] = new Color32(214, 183, 122, (byte)(a * 150f));
+            px[y] = new Color32(214, 183, 122, (byte)(a * 75f));
         }
 
         tex.SetPixels32(px);
@@ -294,15 +403,15 @@ public sealed class HubScreen : IScreen
     // is dark/the backdrop shows through the real frame's hollow center).
     private void BuildList()
     {
-        _listCol.Clear();
-        _listCol.Add(new Label(_view.AtClassBoss ? "— The Boss —" : "— The Wave —")
+        _listBoard.Clear();
+        _listBoard.Add(new Label(_view.AtClassBoss ? "— The Boss —" : "— The Wave —")
         {
             style = { color = (Color)BardTheme.Gilt, fontSize = 16, unityFontStyleAndWeight = FontStyle.Bold, unityTextAlign = TextAnchor.MiddleCenter, marginBottom = 12 },
         });
 
         if (_rows.Count == 0)
         {
-            _listCol.Add(new Label(_view.IsComplete ? "Your legend is complete" : "No monsters delivered")
+            _listBoard.Add(new Label(_view.IsComplete ? "Your legend is complete" : "No monsters delivered")
             {
                 style = { color = (Color)BardTheme.Parchment, fontSize = 16, unityTextAlign = TextAnchor.MiddleCenter, whiteSpace = WhiteSpace.Normal },
             });
@@ -311,7 +420,7 @@ public sealed class HubScreen : IScreen
 
         for (int i = 0; i < _rows.Count; i++)
         {
-            _listCol.Add(WaveRow(_rows[i], i == _cursor));
+            _listBoard.Add(WaveRow(_rows[i], i == _cursor));
         }
     }
 
@@ -595,6 +704,37 @@ public sealed class HubScreen : IScreen
             borderLeftColor = new Color(0.12f, 0.35f, 0.13f), borderRightColor = new Color(0.12f, 0.35f, 0.13f),
         },
     };
+
+    // A callout appears only where there is a true objective — an Elite, a class boss, or completion. During
+    // the ordinary grind the board itself carries the intent, so no line is drawn.
+    private void UpdateCallout()
+    {
+        string text = null;
+        if (_view.IsComplete)
+        {
+            text = "Your legend is complete";
+        }
+        else if (_view.AtClassBoss)
+        {
+            text = $"The {BardTheme.ClassName(_view.Class)} boss guards the road to {NextClassName()}";
+        }
+        else if (_view.AtMiniBoss)
+        {
+            int bar = Mathf.RoundToInt((float)(QuestLadder.MiniBossBar(_view.Class) * 100.0));
+            text = $"An Elite blocks the path — beat it at {bar}%";
+        }
+
+        _callout.text = text ?? string.Empty;
+        _callout.style.display = text == null ? DisplayStyle.None : DisplayStyle.Flex;
+    }
+
+    // The next class up the ladder; the class-boss phase never fires on the top class, so this is valid
+    // wherever UpdateCallout uses it.
+    private string NextClassName()
+    {
+        var next = (PlayerClass)((int)_view.Class + 1);
+        return BardTheme.ClassName(next);
+    }
 
     private void Confirm()
     {
